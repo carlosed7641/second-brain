@@ -101,6 +101,12 @@ const MIGRATIONS: string[] = [
     ALTER TABLE doc_metadata ADD COLUMN label TEXT;
     CREATE INDEX idx_meta_date ON doc_metadata(value_date);
   `,
+
+  // 3 — resumen incremental de la conversación (compactación)
+  /* sql */ `
+    ALTER TABLE chat_sessions ADD COLUMN summary TEXT;
+    ALTER TABLE chat_sessions ADD COLUMN summary_upto INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 function applyMigrations(db: DB): void {

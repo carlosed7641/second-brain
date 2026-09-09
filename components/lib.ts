@@ -86,6 +86,20 @@ export function fmtBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** Coste estimado del turno (precios de Claude Opus 5; la caché se cobra al 10%). */
+export function estimateCostUSD(u: TokenUsage): number {
+  const IN = 5,
+    OUT = 25; // $/1M tokens
+  const cached = u.cache_read_input_tokens ?? 0;
+  const fresh = Math.max(0, u.input_tokens - cached);
+  return (fresh * IN + cached * IN * 0.1 + u.output_tokens * OUT) / 1_000_000;
+}
+
+export function fmtUSD(usd: number): string {
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(3)}`;
+}
+
 export function rawUrl(fileId: string, page?: number | null): string {
   return `/api/files/${fileId}/raw${page ? `#page=${page}` : ""}`;
 }

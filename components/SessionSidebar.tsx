@@ -8,6 +8,7 @@ import { fetcher, type SessionDTO } from "./lib";
 interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
+  onNew: () => void;
   onDeleted: (id: string) => void;
   fileCount: number;
   onToggleFiles: () => void;
@@ -17,6 +18,7 @@ interface Props {
 export default function SessionSidebar({
   activeId,
   onSelect,
+  onNew,
   onDeleted,
   fileCount,
   onToggleFiles,
@@ -26,13 +28,6 @@ export default function SessionSidebar({
   const sessions = data?.sessions ?? [];
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-
-  async function newChat() {
-    const res = await fetch("/api/sessions", { method: "POST" });
-    const { session } = await res.json();
-    await mutate();
-    onSelect(session.id);
-  }
 
   async function remove(id: string) {
     await fetch(`/api/sessions/${id}`, { method: "DELETE" });
@@ -62,8 +57,9 @@ export default function SessionSidebar({
       </div>
 
       <button
-        onClick={newChat}
+        onClick={onNew}
         className="flex h-10 items-center justify-center gap-2 rounded-[10px] bg-primary text-sm font-semibold text-white transition hover:bg-primary-strong"
+        title="Nuevo chat (⌘K)"
       >
         <PlusIcon size={16} />
         Nuevo chat

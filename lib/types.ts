@@ -44,6 +44,8 @@ export interface ChatSessionRow {
   title: string;
   created_at: string;
   updated_at: string;
+  summary: string | null;
+  summary_upto: number;
 }
 
 export type MessageRole = "user" | "assistant";

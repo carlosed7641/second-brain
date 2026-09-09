@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import SessionSidebar from "@/components/SessionSidebar";
 import ChatPane from "@/components/ChatPane";
@@ -25,11 +25,30 @@ export default function Home() {
     else localStorage.removeItem(LS_KEY);
   }, [activeId]);
 
+  const newChat = useCallback(async () => {
+    const res = await fetch("/api/sessions", { method: "POST" });
+    const { session } = await res.json();
+    await mutate("/api/sessions");
+    setActiveId(session.id);
+  }, [mutate]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        newChat();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [newChat]);
+
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
       <SessionSidebar
         activeId={activeId}
         onSelect={setActiveId}
+        onNew={newChat}
         onDeleted={(id) => setActiveId((cur) => (cur === id ? null : cur))}
         fileCount={filesData?.files.length ?? 0}
         filesOpen={filesOpen}

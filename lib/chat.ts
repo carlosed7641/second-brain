@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { summarizeConversation } from "./claude";
 import type { ChatSessionRow, Citation, MessageRole, MessageRow, TokenUsage } from "./types";
 
 /** Helpers de acceso a datos para sesiones de chat y mensajes. */
@@ -80,4 +81,52 @@ export function messageCount(sessionId: string): number {
       n: number;
     }
   ).n;
+}
+
+/* ---------- Compactación de historial ---------- */
+
+const COMPACT_AFTER = 14; // nº de mensajes a partir del cual se compacta
+const KEEP_RECENT = 8; // mensajes literales que se conservan siempre
+
+interface PromptContext {
+  summary: string | null; // resumen de los turnos antiguos
+  recent: MessageRow[]; // turnos recientes en claro
+}
+
+/**
+ * Devuelve el contexto para el prompt: los últimos turnos en claro y, si la
+ * conversación es larga, un resumen de lo anterior (generado con el modelo barato
+ * y guardado en la sesión para no recalcularlo cada vez).
+ */
+export async function getPromptContext(sessionId: string): Promise<PromptContext> {
+  const db = getDb();
+  const all = db
+    .prepare(
+      "SELECT * FROM messages WHERE session_id = ? ORDER BY datetime(created_at) ASC, rowid ASC LIMIT 400",
+    )
+    .all(sessionId) as MessageRow[];
+
+  if (all.length <= COMPACT_AFTER) return { summary: null, recent: all };
+
+  const cutoff = all.length - KEEP_RECENT;
+  const recent = all.slice(cutoff);
+  const session = getSession(sessionId);
+  let summary = session?.summary ?? null;
+  const upto = session?.summary_upto ?? 0;
+
+  if (upto < cutoff) {
+    const transcript = all
+      .slice(upto, cutoff)
+      .map((m) => `${m.role === "user" ? "Usuario" : "Asistente"}: ${m.content}`)
+      .join("\n\n");
+    try {
+      summary = await summarizeConversation(transcript, summary ?? undefined);
+      db.prepare(
+        "UPDATE chat_sessions SET summary = ?, summary_upto = ? WHERE id = ?",
+      ).run(summary, cutoff, sessionId);
+    } catch (e) {
+      console.warn("[chat] compactación falló:", e);
+    }
+  }
+  return { summary, recent };
 }
