@@ -1,0 +1,15 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Files.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Ingesting.dc.html", "x": 3120, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Empty.dc.html", "x": 4680, "y": 0, "w": 1440, "h": 900 }
+  ],
+  "annotations": [
+    { "id": "note-main", "x": 0, "y": -110, "w": 420, "text": "Chat a pantalla completa: sidebar de sesiones + conversación con tarjetas de cita al documento y página. El input está siempre abajo." },
+    { "id": "note-files", "x": 1560, "y": -110, "w": 420, "text": "Panel de archivos (drawer derecho): categorías tipo carpeta con contador y estado 'Indexado'. Zona de arrastre + recordatorio de data/inbox/." },
+    { "id": "note-ingesting", "x": 3120, "y": -110, "w": 420, "text": "Estado de ingesta: extraer texto -> trocear -> generar embeddings -> extraer metadatos. OCR para imágenes escaneadas." },
+    { "id": "note-empty", "x": 4680, "y": -110, "w": 420, "text": "Primer arranque: sin documentos ni chats. CTA para subir o soltar en la carpeta." }
+  ],
+  "launch": { "view": "canvas" }
+}

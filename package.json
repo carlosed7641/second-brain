@@ -9,12 +9,24 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "better-sqlite3": "^13.0.3",
+    "chokidar": "^5.0.0",
+    "gpt-tokenizer": "^4.0.0",
+    "mammoth": "^1.12.2",
     "next": "16.3.4",
+    "pdfjs-dist": "^6.3.289",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-pdf": "^10.5.0",
+    "sqlite-vec": "^0.1.9",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

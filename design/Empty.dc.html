@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesque:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Hanken Grotesque', system-ui, -apple-system, sans-serif; background: #F6F8F6; color: #1A2B22; -webkit-font-smoothing: antialiased; }
+    a { color: #237A52; } a:hover { color: #155C3B; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; display: flex; overflow: hidden; background: #F6F8F6;">
+
+  <!-- SIDEBAR -->
+  <aside style="width: 264px; flex-shrink: 0; background: #FFFFFF; border-right: 1px solid #E6ECE8; display: flex; flex-direction: column; padding: 20px; gap: 18px;">
+    <div style="display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px;">
+      <span style="width: 32px; height: 32px; border-radius: 9px; background: #EAF4EE; color: #237A52; display: flex; align-items: center; justify-content: center;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3a3 3 0 0 0-3 3 3 3 0 0 0-1 5.5V15a3 3 0 0 0 4 2.8A3 3 0 0 0 12 19V5a2 2 0 0 0-2-2Z"/><path d="M15 3a3 3 0 0 1 3 3 3 3 0 0 1 1 5.5V15a3 3 0 0 1-4 2.8A3 3 0 0 1 12 19"/></svg>
+      </span>
+      Second Brain
+    </div>
+    <button style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; border: none; border-radius: 10px; background: #237A52; color: #FFFFFF; font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Nuevo chat
+    </button>
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #8A978F; font-weight: 600; padding: 0 4px;">Chats</div>
+      <div style="font-size: 12.5px; color: #A6B2AA; padding: 8px 10px; line-height: 1.5;">Aún no tienes conversaciones.</div>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <button style="display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; border: 1px solid #E6ECE8; background: #FBFDFC; font-family: inherit; font-size: 13px; color: #1A2B22; cursor: pointer; text-align: left;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#237A52" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+      <span style="flex-grow: 1; font-weight: 500;">Archivos</span>
+      <span style="font-size: 12px; color: #8A978F;">0 docs</span>
+    </button>
+  </aside>
+
+  <!-- EMPTY STATE -->
+  <main style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+    <header style="height: 60px; flex-shrink: 0; border-bottom: 1px solid #E6ECE8; display: flex; align-items: center; padding: 0 28px; background: #FFFFFF;">
+      <span style="font-weight: 600; font-size: 15px;">Nuevo chat</span>
+    </header>
+
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; background: #F6F8F6;">
+      <div style="display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 460px; gap: 20px;">
+        <span style="width: 76px; height: 76px; border-radius: 22px; background: #EAF4EE; color: #237A52; display: flex; align-items: center; justify-content: center;">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3a3 3 0 0 0-3 3 3 3 0 0 0-1 5.5V15a3 3 0 0 0 4 2.8A3 3 0 0 0 12 19V5a2 2 0 0 0-2-2Z"/><path d="M15 3a3 3 0 0 1 3 3 3 3 0 0 1 1 5.5V15a3 3 0 0 1-4 2.8A3 3 0 0 1 12 19"/></svg>
+        </span>
+        <div style="font-size: 22px; font-weight: 700; color: #12402B;">Tu Second Brain está vacío</div>
+        <div style="font-size: 14px; line-height: 1.6; color: #5B6A62;">
+          Arrastra tus contratos, seguros, recibos y notas — o suéltalos en la carpeta
+          <span style="color: #237A52; font-weight: 600;">data/inbox/</span>. Los indexo automáticamente y
+          podrás preguntarme lo que sea.
+        </div>
+        <button style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 22px; border: none; border-radius: 12px; background: #237A52; color: #FFFFFF; font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+          Subir documentos
+        </button>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px;">
+          <span style="padding: 6px 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E0EAE4; font-size: 12px; color: #4A5A51;">Contratos</span>
+          <span style="padding: 6px 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E0EAE4; font-size: 12px; color: #4A5A51;">Seguros</span>
+          <span style="padding: 6px 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E0EAE4; font-size: 12px; color: #4A5A51;">Finanzas</span>
+          <span style="padding: 6px 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E0EAE4; font-size: 12px; color: #4A5A51;">Notas</span>
+          <span style="padding: 6px 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E0EAE4; font-size: 12px; color: #4A5A51;">PDFs escaneados</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid #E6ECE8; padding: 18px 28px; background: #FFFFFF; display: flex; align-items: center; gap: 12px;">
+      <div style="flex: 1; height: 46px; padding: 0 14px; border: 1px solid #D8E2DC; border-radius: 12px; background: #FBFDFC; color: #B7C4BC; font-size: 14px; display: flex; align-items: center;">Sube un documento para empezar…</div>
+      <button style="width: 46px; height: 46px; border: none; border-radius: 12px; background: #DCEEE3; color: #7FAF95; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-7-7 16-2-7-7-2Z"/></svg>
+      </button>
+    </div>
+  </main>
+
+</div>
+</x-dc>
+</body>
+</html>
