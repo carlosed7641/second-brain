@@ -95,6 +95,12 @@ const MIGRATIONS: string[] = [
     CREATE INDEX idx_meta_file ON doc_metadata(file_id);
     CREATE INDEX idx_meta_key  ON doc_metadata(key);
   `,
+
+  // 2 — etiqueta legible para cada metadato (vista "próximos vencimientos")
+  /* sql */ `
+    ALTER TABLE doc_metadata ADD COLUMN label TEXT;
+    CREATE INDEX idx_meta_date ON doc_metadata(value_date);
+  `,
 ];
 
 function applyMigrations(db: DB): void {

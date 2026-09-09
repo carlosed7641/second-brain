@@ -15,7 +15,15 @@ import {
   TrashIcon,
   XIcon,
 } from "./icons";
-import { STATUS_LABEL, fetcher, rawUrl, type FileDTO } from "./lib";
+import {
+  STATUS_LABEL,
+  daysUntil,
+  fetcher,
+  fmtDate,
+  rawUrl,
+  type FileDTO,
+  type MetadataDTO,
+} from "./lib";
 
 const BUSY: FileDTO["status"][] = ["pending", "extracting", "chunking", "embedding", "metadata"];
 
@@ -102,6 +110,8 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-3">
+        <UpcomingDeadlines />
+
         {files.length === 0 && (
           <p className="px-2 py-8 text-center text-[13px] leading-relaxed text-faint">
             Sin documentos todavía. Arrastra archivos aquí o suéltalos en{" "}
@@ -154,6 +164,42 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function UpcomingDeadlines() {
+  const { data } = useSWR<{ items: MetadataDTO[] }>("/api/metadata?upcoming=1&limit=6", fetcher);
+  const items = data?.items ?? [];
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-2 rounded-xl border border-mint-border bg-[#FBFEFC] p-3">
+      <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+        Próximos vencimientos
+      </div>
+      <div className="flex flex-col gap-1">
+        {items.map((m) => {
+          const d = daysUntil(m.value_date);
+          return (
+            <a
+              key={m.id}
+              href={rawUrl(m.file_id, m.page)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[12.5px] hover:bg-mint-tint"
+            >
+              <CategoryIcon category={m.category} size={13} />
+              <span className="min-w-0 flex-1 truncate">{m.label ?? m.value}</span>
+              <span className="shrink-0 text-[11px] text-muted">{fmtDate(m.value_date)}</span>
+              {d != null && d <= 30 && (
+                <span className="shrink-0 rounded-full bg-mint px-1.5 text-[10px] font-semibold text-primary-strong">
+                  {d <= 0 ? "hoy" : `${d} d`}
+                </span>
+              )}
+            </a>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

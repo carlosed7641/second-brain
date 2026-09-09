@@ -89,11 +89,18 @@ export interface DocMetadataRow {
   id: string;
   file_id: string;
   key: MetadataKey | string;
+  label: string | null; // etiqueta legible: "Seguro del auto"
   value: string;
   value_date: string | null; // ISO 8601
   value_num: number | null;
   confidence: number | null;
   page: number | null;
+}
+
+/** Metadato + datos de su archivo (para la vista de vencimientos y la ruta SQL). */
+export interface MetadataHit extends DocMetadataRow {
+  file_name: string;
+  category: import("./categories").Category;
 }
 
 /** Fragmento recuperado, listo para ensamblar contexto. */

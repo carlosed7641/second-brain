@@ -1,5 +1,5 @@
 import { CONTEXT_TOKEN_BUDGET } from "./config";
-import type { Citation, RetrievedChunk } from "./types";
+import type { Citation, MetadataHit, RetrievedChunk } from "./types";
 
 /**
  * Ensambla el bloque de contexto que se le pasa a Claude, respetando el
@@ -43,6 +43,26 @@ export function assembleContext(
     .join("\n\n---\n\n");
 
   return { contextText, citations, chunksUsed: picked.length, tokensUsed };
+}
+
+/** Contexto a partir de metadatos ya estructurados (ruta SQL, sin recuperación). */
+export function assembleMetadataContext(hits: MetadataHit[]): AssembledContext {
+  const citations: Citation[] = hits.map((h, i) => ({
+    n: i + 1,
+    file_id: h.file_id,
+    file_name: h.file_name,
+    category: h.category,
+    page: h.page,
+    snippet: `${h.label ?? h.key}: ${h.value}`,
+  }));
+  const contextText = hits
+    .map((h, i) => {
+      const loc = h.page != null ? ` · p.${h.page}` : "";
+      const iso = h.value_date ? ` (${h.value_date})` : "";
+      return `[${i + 1}] ${h.file_name}${loc} — ${h.label ?? h.key}: ${h.value}${iso}`;
+    })
+    .join("\n");
+  return { contextText, citations, chunksUsed: hits.length, tokensUsed: 0 };
 }
 
 /** Envuelve la pregunta del usuario con el contexto recuperado. */
