@@ -101,74 +101,105 @@ al arranque vía `instrumentation.ts`. `lib/config.ts` (paths, modelos, presupue
 getters de API keys), `lib/categories.ts`, `lib/types.ts`. Theme Tailwind con la paleta.
 `.env.example` / `.env.local`. `data/` fuera de git.
 
-### Fase 2 — Pipeline de ingesta
+### Fase 2 — Pipeline de ingesta ✅
 - `lib/watcher.ts` — `chokidar` sobre `data/inbox/`: archivo estable → hash → mover a
   `data/files/` → `lib/ingest.ts`. Arrancado desde `instrumentation.ts`.
 - `POST /api/files` — recibe archivo(s), guarda en `data/files/`, encola ingesta.
 - `lib/extract.ts` — dispatcher por mime: `pdfjs-dist` (texto por página), `mammoth`,
-  `xlsx`, lectura plana, `tesseract.js` (OCR cuando el PDF no trae texto o es imagen).
-- `lib/chunk.ts` — troceado por tokens con solape (`gpt-tokenizer`).
-- `lib/embed.ts` — cliente Voyage, batching, reintentos.
-- `lib/ingest.ts` — orquesta extract → chunk → embed → insert (`chunks`, `chunk_vec`,
-  `chunks_fts`) → extracción de `doc_metadata` con Haiku. Actualiza `files.status`.
-- `GET /api/files` — lista con estado. `DELETE /api/files/[id]` — borra archivo + chunks +
-  vectores. `POST /api/files/[id]/reindex`.
+  `xlsx`, lectura plana, `tesseract.js` (OCR cuando el PDF no trae texto o es imagen,
+  vía `pdf-to-img` para renderizar páginas). OCR/DOCX/XLSX: typecheck + build, sin
+  verificación en runtime.
+- `lib/chunk.ts` — troceado ~650 tokens con solape ~100, sin cruzar páginas.
+- `lib/embed.ts` — cliente Voyage, batching, backoff largo ante 429 (`EMBED_FAKE=1` para
+  dev offline).
+- `lib/ingest.ts` — cola en serie, dedupe por hash SHA-256, orquesta extract → chunk →
+  embed → insert (`chunks`, `chunk_vec`, `chunks_fts`) → metadatos. `reindexFile`.
+- `lib/files.ts` — helpers DB. `GET/DELETE /api/files`, `POST /api/files/[id]` (reindex).
 
-### Fase 3 — Recuperación + backend de chat
-- `lib/retrieve.ts` — `hybridSearch(query, k)`: embed consulta → `sqlite-vec` KNN + `FTS5`
-  match → fusión RRF → chunks con `{fileName, page, text, score}`.
-- `lib/context.ts` — ensambla el prompt de contexto respetando el tope de tokens, formatea
-  citas (`[1] contrato-alquiler.pdf p.3`).
-- `lib/claude.ts` — cliente, system prompt con `cache_control`, helper de streaming,
-  compactación de historial.
-- `POST /api/chat` — body `{sessionId, message}`. Clasifica (SQL vs RAG), recupera, llama a
-  `client.messages.stream`, devuelve `ReadableStream`. Persiste mensaje y citas al terminar.
+### Fase 3 — Recuperación + backend de chat ✅
+- `lib/retrieve.ts` — `hybridSearch`: embed consulta → `sqlite-vec` KNN + `FTS5` (MATCH
+  saneado + stopwords) → fusión RRF (k=60) → hidratado con archivo/categoría.
+- `lib/context.ts` — `assembleContext` (tope `CONTEXT_TOKEN_BUDGET`, citas paralelas),
+  `assembleMetadataContext`, `buildUserTurn`.
+- `lib/claude.ts` — cliente, `SYSTEM_PROMPT` detallado con `cache_control`, `streamAnswer`
+  (opus-5, adaptive thinking, `CHAT_EFFORT`), `generateTitle`, `summarizeConversation`.
+- `lib/chat.ts` — sesiones/mensajes, `getPromptContext` (historial + resumen).
+- `POST /api/chat` — clasifica (SQL vs RAG), recupera, `messages.stream`, devuelve NDJSON
+  (`citations` → `delta` → `done`/`error`). Persiste mensaje + `usage`; auto-título.
+- `GET/POST /api/sessions`, `GET/PATCH/DELETE /api/sessions/[id]`.
 
-### Fase 4 — UI de chat
-- `app/page.tsx` — shell a pantalla completa: sidebar de sesiones + panel de chat +
-  botón/drawer de archivos.
-- `components/ChatPane.tsx` — historial, render incremental del stream
-  (`response.body.getReader()` + `TextDecoder`), auto-scroll, tarjetas de cita que enlazan
-  al archivo y página.
-- `components/SessionSidebar.tsx` — crear / renombrar / borrar sesiones (persistidas en
-  `chat_sessions`), cambio de sesión, resaltado de la activa.
-- **Título automático del chat:** tras el primer mensaje, llamada corta a `claude-haiku-4-5`
-  que resume en 3–6 palabras → `chat_sessions.title` (renombrable a mano). En background al
-  terminar el primer stream.
-- `components/FileBrowser.tsx` — lista por carpeta, subir (drag & drop), estado de indexado,
-  borrar / reindexar.
-- `components/PdfPreview.tsx` — al hacer clic en una cita, visor del PDF en la página citada
-  (`react-pdf`).
+### Fase 4 — UI de chat ✅
+- `app/page.tsx` — shell a pantalla completa (`h-dvh`); sesión activa en `localStorage`;
+  ⌘K = nuevo chat.
+- `components/ChatPane.tsx` — historial (SWR) + render incremental del stream
+  (`body.getReader()` + `TextDecoder`, NDJSON); chips de cita clicables; `[n]` inline;
+  textarea autoexpand; auto-scroll; aborta el stream al cambiar de sesión; contador de
+  tokens/coste bajo cada respuesta.
+- `components/SessionSidebar.tsx` — crear / renombrar (doble-clic) / borrar; resaltado.
+- **Título automático:** Haiku resume el primer intercambio → `chat_sessions.title`.
+- `components/FileBrowser.tsx` — drawer con SWR + `refreshInterval` durante la ingesta;
+  categorías plegables; subida por botón y drag&drop; estado / reindexar / borrar;
+  "reindexar todo"; card de próximos vencimientos.
+- **Visor de PDF:** en vez de `react-pdf` embebido, clic en una cita abre
+  `/api/files/[id]/raw#page=N` en pestaña nativa del navegador (más simple, offline).
 
-### Fase 5 — Capa de metadatos
-Extracción estructurada en la ingesta (Haiku con structured outputs / `output_config.format`).
-Vista "Próximos vencimientos" (SQL sobre `doc_metadata` ordenado por fecha). Ruta de
-respuesta por SQL para preguntas de fecha/importe.
+### Fase 5 — Capa de metadatos ✅
+- `lib/metadata.ts` — `extractAndStoreMetadata` (Haiku + Zod `output_config.format`) en la
+  ingesta; `queryMetadata`.
+- `lib/classify.ts` — `classifyQuestion` decide `metadata` vs `content`.
+- `POST /api/chat` — ruta `metadata`: responde por SQL sobre `doc_metadata`, **sin Voyage
+  ni fragmentos** (`route` en el evento `done`).
+- `GET /api/metadata` (`?upcoming=1`, `?fileId=`) + card "Próximos vencimientos".
+- Migración 2: columna `label`.
 
-### Fase 6 — Pulido
-Verificar `cache_read_input_tokens` > 0 en turnos repetidos. Compactación real de
-conversación. Estados de error y vacío. Atajos de teclado (⌘K nuevo chat, ⌘↵ enviar).
-Contador de tokens/coste por mensaje (desde `usage`). Reindexado masivo.
+### Fase 6 — Pulido ✅
+- **Prompt caching real** (verificado): `SYSTEM_PROMPT` de ~1,8k tokens con `cache_control`
+  + breakpoint en el último turno del historial → `cache_read_input_tokens` ~1,9k en
+  turnos 2+, `input_tokens` frescos ~82.
+- **Compactación:** `getPromptContext` resume con Haiku a partir de 14 mensajes,
+  guardado en `chat_sessions.summary`/`summary_upto` (migración 3). Sin prueba en runtime
+  a escala.
+- **Contador de tokens/coste** por respuesta + badge "respuesta directa" en la ruta SQL.
+- **Atajo ⌘K / Ctrl+K** (nuevo chat) y Enter / Shift+Enter en el input.
+- **Reindexar todo** — `POST /api/files/reindex` + botón en el drawer.
+
+---
+
+## Estado
+
+Fases 0–6 completas. `tsc` + `npm run build` limpios. Verificado end-to-end con claves
+reales: ingesta (watcher + API) → recuperación híbrida → respuesta en streaming citada;
+ruta de metadatos por SQL; prompt caching activo en multi-turno.
+
+Pendiente de verificar en runtime: OCR de imágenes/PDF escaneado, DOCX, XLSX, y la
+compactación con conversaciones de 15+ mensajes.
 
 ---
 
 ## Archivos clave
 
 ```
-app/layout.tsx, app/page.tsx
-app/api/chat/route.ts            # streaming ReadableStream
-app/api/files/route.ts          # subir + listar
-app/api/files/[id]/route.ts     # borrar + reindexar
-instrumentation.ts              # migraciones + watcher al arrancar
-lib/db.ts lib/config.ts lib/categories.ts lib/types.ts       # ✅ Fase 1
-lib/watcher.ts lib/extract.ts lib/chunk.ts lib/embed.ts lib/ingest.ts
-lib/retrieve.ts lib/context.ts lib/claude.ts lib/metadata.ts
-components/ChatPane.tsx components/SessionSidebar.tsx
-components/FileBrowser.tsx components/PdfPreview.tsx
+app/layout.tsx  app/page.tsx  app/globals.css
+app/api/chat/route.ts                 # streaming NDJSON (ReadableStream)
+app/api/files/route.ts                # subir + listar
+app/api/files/[id]/route.ts           # borrar + reindexar
+app/api/files/[id]/raw/route.ts       # servir el archivo original (citas / preview)
+app/api/files/reindex/route.ts        # reindexar todo
+app/api/sessions/route.ts  app/api/sessions/[id]/route.ts
+app/api/metadata/route.ts             # vencimientos / ruta SQL
+instrumentation.ts                    # migraciones + watcher al arrancar
+lib/db.ts lib/config.ts lib/categories.ts lib/types.ts
+lib/watcher.ts lib/extract.ts lib/chunk.ts lib/tokens.ts lib/embed.ts
+lib/ingest.ts lib/files.ts
+lib/retrieve.ts lib/context.ts lib/claude.ts lib/chat.ts lib/classify.ts lib/metadata.ts
+components/ChatPane.tsx components/SessionSidebar.tsx components/FileBrowser.tsx
+components/icons.tsx components/lib.ts
 ```
 
 Dependencias: `@anthropic-ai/sdk`, `better-sqlite3`, `sqlite-vec`, `chokidar`, `pdfjs-dist`,
-`mammoth`, `xlsx` (build de SheetJS CDN), `tesseract.js`, `react-pdf`, `gpt-tokenizer`, `zod`.
+`pdf-to-img`, `mammoth`, `xlsx` (build de SheetJS CDN), `tesseract.js`, `gpt-tokenizer`,
+`zod`, `swr`.  (El visor de PDF embebido `react-pdf` se descartó en favor de la pestaña
+nativa del navegador.)
 
 ---
 
