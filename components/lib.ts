@@ -55,6 +55,31 @@ export const STATUS_LABEL: Record<FileDTO["status"], string> = {
   error: "Error",
 };
 
+export interface MetadataDTO {
+  id: string;
+  file_id: string;
+  file_name: string;
+  category: string;
+  key: string;
+  label: string | null;
+  value: string;
+  value_date: string | null;
+  value_num: number | null;
+  page: number | null;
+}
+
+export function fmtDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
+
+export function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const ms = new Date(`${iso}T00:00:00`).getTime() - Date.now();
+  return Math.ceil(ms / 86_400_000);
+}
+
 export function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;

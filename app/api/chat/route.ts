@@ -2,7 +2,9 @@ import { NextRequest } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { addMessage, getHistory, getSession, messageCount, renameSession } from "@/lib/chat";
 import { hybridSearch } from "@/lib/retrieve";
-import { assembleContext, buildUserTurn } from "@/lib/context";
+import { assembleContext, assembleMetadataContext, buildUserTurn } from "@/lib/context";
+import { classifyQuestion } from "@/lib/classify";
+import { queryMetadata } from "@/lib/metadata";
 import { generateTitle, streamAnswer } from "@/lib/claude";
 import type { Citation, TokenUsage } from "@/lib/types";
 
@@ -38,17 +40,41 @@ export async function POST(req: NextRequest) {
   const isFirstTurn = messageCount(sessionId) === 0;
   addMessage({ session_id: sessionId, role: "user", content: message });
 
-  // Recuperación híbrida + ensamblado de contexto.
+  // Ruta: metadatos (SQL directo, sin embeddings) vs contenido (RAG híbrido).
+  let route: "metadata" | "content" = "content";
   let citations: Citation[] = [];
   let contextText = "";
+
   try {
-    const chunks = await hybridSearch(message, { fileId: body.fileId });
-    const assembled = assembleContext(chunks);
-    citations = assembled.citations;
-    contextText = assembled.contextText;
+    const cls = await classifyQuestion(message);
+    if (cls.route === "metadata") {
+      const hits = queryMetadata({
+        keys: cls.keys.length ? cls.keys : undefined,
+        fileId: body.fileId,
+        limit: 12,
+      });
+      if (hits.length > 0) {
+        route = "metadata";
+        const a = assembleMetadataContext(hits);
+        citations = a.citations;
+        contextText = a.contextText;
+      }
+    }
   } catch (e) {
-    console.error("[api/chat] retrieval:", e);
+    console.warn("[api/chat] clasificación:", e);
   }
+
+  if (route === "content") {
+    try {
+      const chunks = await hybridSearch(message, { fileId: body.fileId });
+      const assembled = assembleContext(chunks);
+      citations = assembled.citations;
+      contextText = assembled.contextText;
+    } catch (e) {
+      console.error("[api/chat] retrieval:", e);
+    }
+  }
+  console.log(`[api/chat] route=${route} fuentes=${citations.length}`);
 
   const messages: Anthropic.MessageParam[] = [
     ...priorHistory.map((m) => ({
@@ -83,7 +109,7 @@ export async function POST(req: NextRequest) {
           citations,
           usage,
         });
-        controller.enqueue(line({ type: "done", usage }));
+        controller.enqueue(line({ type: "done", usage, route }));
 
         if (isFirstTurn) {
           generateTitle(message, full)
