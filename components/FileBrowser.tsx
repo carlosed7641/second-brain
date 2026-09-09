@@ -60,6 +60,10 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
     await fetch(`/api/files/${id}`, { method: "POST" });
     mutate();
   }
+  async function reindexAll() {
+    await fetch("/api/files/reindex", { method: "POST" });
+    mutate();
+  }
 
   return (
     <section
@@ -93,6 +97,14 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
         >
           <PlusIcon size={14} />
           Subir
+        </button>
+        <button
+          onClick={reindexAll}
+          disabled={files.length === 0}
+          className="flex size-8 items-center justify-center rounded-[9px] border border-border bg-[#FBFDFC] text-muted hover:text-primary disabled:opacity-40"
+          title="Reindexar todos los archivos"
+        >
+          <RefreshIcon size={14} />
         </button>
         <button
           onClick={onClose}

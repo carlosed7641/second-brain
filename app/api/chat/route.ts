@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
-import { addMessage, getHistory, getSession, messageCount, renameSession } from "@/lib/chat";
+import { addMessage, getPromptContext, getSession, messageCount, renameSession } from "@/lib/chat";
 import { hybridSearch } from "@/lib/retrieve";
 import { assembleContext, assembleMetadataContext, buildUserTurn } from "@/lib/context";
 import { classifyQuestion } from "@/lib/classify";
@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Sesión no encontrada" }, { status: 404 });
   }
 
-  const priorHistory = getHistory(sessionId, 12);
   const isFirstTurn = messageCount(sessionId) === 0;
+  const { summary, recent } = await getPromptContext(sessionId);
   addMessage({ session_id: sessionId, role: "user", content: message });
 
   // Ruta: metadatos (SQL directo, sin embeddings) vs contenido (RAG híbrido).
@@ -76,11 +76,27 @@ export async function POST(req: NextRequest) {
   }
   console.log(`[api/chat] route=${route} fuentes=${citations.length}`);
 
+  // Historia reciente en claro; breakpoint de caché en el último turno para que el
+  // prefijo (system + historia) se sirva de la caché en los siguientes turnos.
+  const history: Anthropic.MessageParam[] = recent.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+  if (history.length > 0) {
+    const last = history[history.length - 1];
+    history[history.length - 1] = {
+      role: last.role,
+      content: [
+        { type: "text", text: last.content as string, cache_control: { type: "ephemeral" } },
+      ],
+    };
+  }
+
   const messages: Anthropic.MessageParam[] = [
-    ...priorHistory.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    })),
+    ...(summary
+      ? [{ role: "user" as const, content: `[Contexto de la conversación previa]\n${summary}` }]
+      : []),
+    ...history,
     { role: "user", content: buildUserTurn(message, contextText) },
   ];
 

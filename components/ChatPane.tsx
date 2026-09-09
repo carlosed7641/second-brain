@@ -4,8 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { BrainIcon, ExternalIcon, SendIcon, SpinnerIcon, UploadIcon } from "./icons";
 import { CategoryIcon } from "./icons";
-import { fetcher, rawUrl, type ChatMessageDTO, type SessionDTO } from "./lib";
-import type { Citation } from "@/lib/types";
+import {
+  estimateCostUSD,
+  fetcher,
+  fmtUSD,
+  rawUrl,
+  type ChatMessageDTO,
+  type SessionDTO,
+} from "./lib";
+import type { Citation, TokenUsage } from "@/lib/types";
 
 interface Props {
   sessionId: string | null;
@@ -19,6 +26,8 @@ interface Pending {
   citations: Citation[];
   error: string | null;
   streaming: boolean;
+  usage: TokenUsage | null;
+  route: "metadata" | "content" | null;
 }
 
 export default function ChatPane({ sessionId, onExchange, onOpenFiles }: Props) {
@@ -46,7 +55,15 @@ export default function ChatPane({ sessionId, onExchange, onOpenFiles }: Props) 
     const question = input.trim();
     if (!question || !sessionId || pending?.streaming) return;
     setInput("");
-    setPending({ question, answer: "", citations: [], error: null, streaming: true });
+    setPending({
+      question,
+      answer: "",
+      citations: [],
+      error: null,
+      streaming: true,
+      usage: null,
+      route: null,
+    });
 
     const ac = new AbortController();
     abortRef.current = ac;
@@ -73,12 +90,14 @@ export default function ChatPane({ sessionId, onExchange, onOpenFiles }: Props) 
           const ev = JSON.parse(raw) as
             | { type: "citations"; citations: Citation[] }
             | { type: "delta"; text: string }
-            | { type: "done" }
+            | { type: "done"; usage: TokenUsage; route: "metadata" | "content" }
             | { type: "error"; message: string };
           if (ev.type === "citations") {
             setPending((p) => (p ? { ...p, citations: ev.citations } : p));
           } else if (ev.type === "delta") {
             setPending((p) => (p ? { ...p, answer: p.answer + ev.text } : p));
+          } else if (ev.type === "done") {
+            setPending((p) => (p ? { ...p, usage: ev.usage, route: ev.route } : p));
           } else if (ev.type === "error") {
             setPending((p) => (p ? { ...p, error: ev.message, streaming: false } : p));
           }
@@ -123,7 +142,12 @@ export default function ChatPane({ sessionId, onExchange, onOpenFiles }: Props) 
           m.role === "user" ? (
             <UserBubble key={m.id} text={m.content} />
           ) : (
-            <AssistantBubble key={m.id} text={m.content} citations={m.citations ?? []} />
+            <AssistantBubble
+              key={m.id}
+              text={m.content}
+              citations={m.citations ?? []}
+              usage={m.usage}
+            />
           ),
         )}
 
@@ -135,6 +159,8 @@ export default function ChatPane({ sessionId, onExchange, onOpenFiles }: Props) 
               citations={pending.citations}
               streaming={pending.streaming}
               error={pending.error}
+              usage={pending.usage}
+              route={pending.route}
             />
           </>
         )}
@@ -179,11 +205,15 @@ function AssistantBubble({
   citations,
   streaming,
   error,
+  usage,
+  route,
 }: {
   text: string;
   citations: Citation[];
   streaming?: boolean;
   error?: string | null;
+  usage?: TokenUsage | null;
+  route?: "metadata" | "content" | null;
 }) {
   return (
     <div className="flex max-w-[640px] gap-3">
@@ -201,6 +231,25 @@ function AssistantBubble({
 
         {error && (
           <p className="rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700">{error}</p>
+        )}
+
+        {(usage || route) && !streaming && (
+          <div className="flex items-center gap-2 text-[11px] text-faint">
+            {route === "metadata" && (
+              <span className="rounded bg-mint-tint px-1.5 py-0.5 font-medium text-primary">
+                respuesta directa
+              </span>
+            )}
+            {usage && (
+              <span>
+                {usage.input_tokens}→{usage.output_tokens} tok
+                {usage.cache_read_input_tokens
+                  ? ` · caché ${usage.cache_read_input_tokens}`
+                  : ""}{" "}
+                · ≈ {fmtUSD(estimateCostUSD(usage))}
+              </span>
+            )}
+          </div>
         )}
 
         {citations.length > 0 && (
