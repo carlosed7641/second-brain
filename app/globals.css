@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
+/* Paleta del segundo cerebro — verde menta / off-white (ver mockups). */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f8f6;
+  --surface: #ffffff;
+  --foreground: #1a2b22;
+  --muted: #6b7a72;
+  --faint: #8a978f;
+  --border: #e6ece8;
+  --primary: #237a52;
+  --primary-strong: #155c3b;
+  --primary-ink: #12402b;
+  --mint: #dceee3;
+  --mint-border: #c3e0ce;
+  --mint-tint: #eaf4ee;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-ink: var(--primary-ink);
+  --color-mint: var(--mint);
+  --color-mint-border: var(--mint-border);
+  --color-mint-tint: var(--mint-tint);
+  --font-sans: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
 }

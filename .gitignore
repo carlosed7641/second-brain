@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# --- Second Brain ---
+/data/*
+!/data/inbox/
+!/data/files/
+/data/inbox/*
+/data/files/*
+!/data/inbox/.gitkeep
+!/data/files/.gitkeep
+*.db
+*.db-shm
+*.db-wal
