@@ -15,6 +15,7 @@
     "gpt-tokenizer": "^4.0.0",
     "mammoth": "^1.12.2",
     "next": "16.3.4",
+    "pdf-to-img": "^7.0.0",
     "pdfjs-dist": "^6.3.289",
     "react": "19.2.8",
     "react-dom": "19.2.8",
