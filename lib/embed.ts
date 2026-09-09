@@ -10,7 +10,9 @@ import { EMBED_DIM, EMBED_MODEL, voyageApiKey } from "./config";
 
 const VOYAGE_URL = "https://api.voyageai.com/v1/embeddings";
 const BATCH_SIZE = 96;
-const MAX_RETRIES = 4;
+const MAX_RETRIES = 5;
+/** Esperas ante 429 (ms). El tier gratuito de Voyage limita a ~3 req/min. */
+const RATE_LIMIT_BACKOFF = [4_000, 12_000, 21_000, 25_000, 30_000];
 
 type InputType = "document" | "query";
 
@@ -62,8 +64,12 @@ async function embedOnce(batch: string[], inputType: InputType): Promise<number[
     if (!retryable || attempt > MAX_RETRIES) {
       throw new Error(`Voyage ${res.status}: ${body.slice(0, 300)}`);
     }
-    const wait = Math.min(30_000, 500 * 2 ** (attempt - 1)) + Math.random() * 400;
-    await new Promise((r) => setTimeout(r, wait));
+    const retryAfter = Number(res.headers.get("retry-after")) * 1000;
+    const wait =
+      res.status === 429
+        ? Math.max(retryAfter || 0, RATE_LIMIT_BACKOFF[Math.min(attempt - 1, RATE_LIMIT_BACKOFF.length - 1)])
+        : Math.min(20_000, 500 * 2 ** (attempt - 1));
+    await new Promise((r) => setTimeout(r, wait + Math.random() * 400));
   }
 }
 
