@@ -8,6 +8,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  EditIcon,
   ExternalIcon,
   PlusIcon,
   RefreshIcon,
@@ -206,7 +207,8 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
                 onClick={() => setOpen((o) => ({ ...o, [cat]: !isOpen }))}
                 onDragOver={(e) => {
                   const types = e.dataTransfer.types;
-                  if (!types.includes(DRAG_MIME) && !types.includes("Files")) return;
+                  const isRelevant = types.includes(DRAG_MIME) || types.includes("Files");
+                  if (!isRelevant) return;
                   e.preventDefault();
                   e.stopPropagation(); // no marcar también el dropzone genérico de abajo
                   setDropCat(cat);
@@ -287,6 +289,9 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
         >
           Arrastra archivos aquí
           <br />o suéltalos en <span className="font-semibold text-primary">data/inbox/</span>
+          <div className="mt-1.5 text-[11px] text-faint">
+            Se subirán a: <span className="font-semibold text-primary">{uploadCategory}</span>
+          </div>
         </div>
       </div>
     </section>
@@ -391,12 +396,8 @@ function FileRow({
           href={rawUrl(f.id)}
           target="_blank"
           rel="noreferrer"
-          onDoubleClick={(e) => {
-            e.preventDefault();
-            setEditing(true);
-          }}
           className="flex min-w-0 flex-1 items-center gap-1 truncate hover:text-primary-strong"
-          title={`${f.original_name} (doble clic para renombrar)`}
+          title={f.original_name}
         >
           <span className="truncate">{f.original_name}</span>
           <ExternalIcon size={11} className="shrink-0 text-faint opacity-0 group-hover:opacity-100" />
@@ -421,6 +422,13 @@ function FileRow({
 
       {!busy && !editing && (
         <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+          <button
+            onClick={() => setEditing(true)}
+            className="rounded p-1 text-faint hover:text-primary"
+            title="Renombrar"
+          >
+            <EditIcon size={12} />
+          </button>
           <button onClick={onReindex} className="rounded p-1 text-faint hover:text-primary" title="Reindexar">
             <RefreshIcon size={12} />
           </button>
