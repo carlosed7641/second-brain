@@ -199,35 +199,43 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
 
         {grouped.map(([cat, list]) => {
           const catUploading = uploading.filter((u) => u.category === cat);
-          const isOpen = q ? true : catUploading.length > 0 ? true : (open[cat] ?? false);
           const isDropTarget = dropCat === cat;
+          // Se abre sola mientras buscas, mientras sube algo, o mientras arrastras
+          // algo encima (aunque estuviera cerrada) — y sigue abierta al entrar en
+          // su contenido, porque los handlers de drag están en TODO el bloque.
+          const isOpen = q || catUploading.length > 0 || isDropTarget || (open[cat] ?? false);
+
           return (
-            <div key={cat}>
+            <div
+              key={cat}
+              onDragOver={(e) => {
+                const types = e.dataTransfer.types;
+                const isRelevant = types.includes(DRAG_MIME) || types.includes("Files");
+                if (!isRelevant) return;
+                e.preventDefault();
+                e.stopPropagation(); // no marcar también el dropzone genérico de abajo
+                setDropCat(cat);
+              }}
+              onDragLeave={(e) => {
+                // Solo si de verdad salimos del bloque (no al movernos a un hijo,
+                // como al pasar de la cabecera a una fila de archivo ya dentro).
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                setDropCat((c) => (c === cat ? null : c));
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation(); // que no lo suba también el <section> con otra categoría
+                setDropCat(null);
+                const id = e.dataTransfer.getData(DRAG_MIME);
+                if (id) patch(id, { category: cat }); // reclasificar un archivo ya indexado
+                else if (e.dataTransfer.files.length) upload(e.dataTransfer.files, cat); // subir desde el Finder, ya categorizado
+              }}
+              className={`rounded-[9px] transition ${isDropTarget ? "bg-mint-tint ring-2 ring-primary" : ""}`}
+            >
               <button
                 onClick={() => setOpen((o) => ({ ...o, [cat]: !isOpen }))}
-                onDragOver={(e) => {
-                  const types = e.dataTransfer.types;
-                  const isRelevant = types.includes(DRAG_MIME) || types.includes("Files");
-                  if (!isRelevant) return;
-                  e.preventDefault();
-                  e.stopPropagation(); // no marcar también el dropzone genérico de abajo
-                  setDropCat(cat);
-                }}
-                onDragLeave={() => setDropCat((c) => (c === cat ? null : c))}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation(); // que no suba y lo suba también el <section> con otra categoría
-                  setDropCat(null);
-                  const id = e.dataTransfer.getData(DRAG_MIME);
-                  if (id) patch(id, { category: cat }); // reclasificar un archivo ya indexado
-                  else if (e.dataTransfer.files.length) upload(e.dataTransfer.files, cat); // subir desde el Finder, ya categorizado
-                }}
                 className={`flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2.5 text-[13.5px] transition ${
-                  isDropTarget
-                    ? "bg-mint-tint ring-2 ring-primary"
-                    : isOpen
-                      ? "bg-[#F1F6F3] font-semibold"
-                      : ""
+                  isDropTarget ? "font-semibold" : isOpen ? "bg-[#F1F6F3] font-semibold" : ""
                 }`}
               >
                 <span className="text-primary">
