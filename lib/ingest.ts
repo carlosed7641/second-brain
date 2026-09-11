@@ -94,6 +94,16 @@ export async function ingestFile(input: IngestInput): Promise<FileRow> {
     hash,
   });
 
+  return runPipeline(id, absPath, originalName);
+}
+
+/**
+ * Pipeline de extraer -> trocear -> embeber -> guardar -> metadatos, para un
+ * archivo YA registrado en `files` (con `id`). Lo comparten `ingestFile` (tras
+ * insertar la fila) y `reindexFile` (que reutiliza la fila existente, sin pasar
+ * por la comprobación de duplicados: sería un "duplicado" de sí mismo).
+ */
+async function runPipeline(id: string, absPath: string, originalName: string): Promise<FileRow> {
   try {
     setStatus(id, "extracting");
     const { pages, pageCount, ocr } = await extract(absPath);
@@ -128,17 +138,16 @@ export async function ingestFile(input: IngestInput): Promise<FileRow> {
   }
 }
 
-/** Reindexa un archivo ya existente (borra chunks y vuelve a ejecutar). */
+/**
+ * Reindexa un archivo ya existente: borra sus chunks/vectores y vuelve a correr
+ * el pipeline directamente (sin pasar por `ingestFile`, que lo detectaría como
+ * "duplicado de sí mismo" por tener el mismo hash y no haría nada).
+ */
 export async function reindexFile(id: string): Promise<FileRow> {
   const file = getFile(id);
   if (!file) throw new Error("Archivo no encontrado");
   clearChunks(id);
-  setStatus(id, "pending");
-  return ingestFile({
-    absPath: file.path,
-    originalName: file.original_name,
-    category: file.category,
-  });
+  return runPipeline(id, file.path, file.original_name);
 }
 
 /** Mueve un archivo suelto a data/files/ con un nombre único y lo ingesta. */
