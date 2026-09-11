@@ -62,9 +62,26 @@ export interface IngestInput {
   category?: string;
 }
 
-export async function ingestFile(input: IngestInput): Promise<FileRow> {
+export interface RegisterResult {
+  file: FileRow;
+  /** false si era un duplicado ya indexado (no hay nada que procesar). */
+  isNew: boolean;
+}
+
+/**
+ * Registra el archivo en la BD: dedupe por hash + `INSERT`. Es rápido (leer
+ * bytes + un hash + una consulta) y se ejecuta **síncronamente con la petición
+ * HTTP que sube el archivo** — a diferencia del pipeline pesado (extraer,
+ * trocear, embeddings), que va a la cola. Así, en cuanto la API responde, la
+ * fila ya existe y el cliente la ve de inmediato al refrescar — sin esto hay
+ * una carrera: el cliente puede refrescar antes de que la fila exista.
+ */
+export async function registerFile(
+  absPath: string,
+  originalName: string,
+  category?: string,
+): Promise<RegisterResult> {
   ensureDataDirs();
-  const { absPath, originalName, category } = input;
   const ext = path.extname(originalName).toLowerCase();
 
   if (!isSupported(originalName)) {
@@ -79,11 +96,11 @@ export async function ingestFile(input: IngestInput): Promise<FileRow> {
   if (dup) {
     if (path.resolve(dup.path) !== path.resolve(absPath)) await unlink(absPath).catch(() => {});
     console.log(`[ingest] duplicado (${originalName}) — ya indexado como ${dup.id}`);
-    return dup;
+    return { file: dup, isNew: false };
   }
 
   const id = crypto.randomUUID();
-  insertFile({
+  const file = insertFile({
     id,
     path: absPath,
     original_name: originalName,
@@ -93,8 +110,21 @@ export async function ingestFile(input: IngestInput): Promise<FileRow> {
     size_bytes: buf.byteLength,
     hash,
   });
+  return { file, isNew: true };
+}
 
-  return runPipeline(id, absPath, originalName);
+/** Ejecuta el pipeline pesado para un archivo ya registrado. Encolar esto, no `registerFile`. */
+export async function processFile(id: string): Promise<FileRow> {
+  const file = getFile(id);
+  if (!file) throw new Error("Archivo no encontrado");
+  return runPipeline(id, file.path, file.original_name);
+}
+
+/** Azúcar para el watcher: registra + procesa en un solo paso encolado. */
+export async function ingestFile(input: IngestInput): Promise<FileRow> {
+  const { file, isNew } = await registerFile(input.absPath, input.originalName, input.category);
+  if (!isNew) return file;
+  return processFile(file.id);
 }
 
 /**
@@ -139,15 +169,16 @@ async function runPipeline(id: string, absPath: string, originalName: string): P
 }
 
 /**
- * Reindexa un archivo ya existente: borra sus chunks/vectores y vuelve a correr
- * el pipeline directamente (sin pasar por `ingestFile`, que lo detectaría como
- * "duplicado de sí mismo" por tener el mismo hash y no haría nada).
+ * Prepara un archivo para reindexar: borra sus chunks/vectores y lo deja en
+ * 'pending' — síncrono, para que se refleje ya en `GET /api/files`. El trabajo
+ * pesado se encola aparte con `processFile(id)`.
  */
-export async function reindexFile(id: string): Promise<FileRow> {
+export function prepareReindex(id: string): FileRow {
   const file = getFile(id);
   if (!file) throw new Error("Archivo no encontrado");
   clearChunks(id);
-  return runPipeline(id, file.path, file.original_name);
+  setStatus(id, "pending");
+  return getFile(id)!;
 }
 
 /** Mueve un archivo suelto a data/files/ con un nombre único y lo ingesta. */

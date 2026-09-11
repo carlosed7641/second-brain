@@ -11,6 +11,7 @@ import {
   ExternalIcon,
   PlusIcon,
   RefreshIcon,
+  SearchIcon,
   SpinnerIcon,
   TrashIcon,
   XIcon,
@@ -26,29 +27,70 @@ import {
 } from "./lib";
 
 const BUSY: FileDTO["status"][] = ["pending", "extracting", "chunking", "embedding", "metadata"];
+/** MIME a medida para el drag interno (arrastrar una fila a otra carpeta). No
+ * choca con el drag de archivos reales del Finder, que llega como tipo "Files". */
+const DRAG_MIME = "application/x-second-brain-file-id";
+
+/** Estado optimista: un archivo que se está subiendo, antes de que exista su fila real. */
+interface UploadingItem {
+  key: string;
+  name: string;
+  category: string;
+}
 
 export default function FileBrowser({ onClose }: { onClose: () => void }) {
   const { data, mutate } = useSWR<{ files: FileDTO[] }>("/api/files", fetcher, {
     refreshInterval: (d) => (d?.files.some((f) => BUSY.includes(f.status)) ? 1500 : 0),
   });
   const files = data?.files ?? [];
-  const [category, setCategory] = useState<string>("Otros");
+  const [uploadCategory, setUploadCategory] = useState<string>("Otros");
   const [open, setOpen] = useState<Record<string, boolean>>({ Seguros: true });
-  const [dragging, setDragging] = useState(false);
+  const [query, setQuery] = useState("");
+  const [dropCat, setDropCat] = useState<string | null>(null); // categoría con un archivo encima
+  const [draggingUpload, setDraggingUpload] = useState(false); // drag de archivo real (Finder)
+  const [uploading, setUploading] = useState<UploadingItem[]>([]); // estado optimista
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? files.filter((f) => f.original_name.toLowerCase().includes(q)) : files;
 
   const grouped = useMemo(() => {
     const map = new Map<string, FileDTO[]>();
     for (const cat of CATEGORIES) map.set(cat, []);
-    for (const f of files) (map.get(f.category) ?? map.get("Otros")!).push(f);
-    return CATEGORIES.map((c) => [c, map.get(c) ?? []] as const).filter(([, v]) => v.length > 0);
-  }, [files]);
+    for (const f of filtered) (map.get(f.category) ?? map.get("Otros")!).push(f);
+    // Buscando: solo las carpetas con resultado. Si no, todas (incluidas vacías,
+    // para poder arrastrar un archivo a una carpeta que hoy no tiene nada).
+    return CATEGORIES.map((c) => [c, map.get(c) ?? []] as const).filter(
+      ([, v]) => v.length > 0 || !q,
+    );
+  }, [filtered, q]);
 
-  async function upload(list: FileList | File[]) {
-    const fd = new FormData();
-    fd.append("category", category);
-    for (const f of Array.from(list)) fd.append("file", f);
-    await fetch("/api/files", { method: "POST", body: fd });
+  async function upload(list: FileList | File[], category: string = uploadCategory) {
+    // Optimista: aparece "Subiendo…" ya, antes de esperar a la red.
+    const items: UploadingItem[] = Array.from(list).map((f) => ({
+      key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: f.name,
+      category,
+    }));
+    setUploading((u) => [...u, ...items]);
+    try {
+      const fd = new FormData();
+      fd.append("category", category);
+      for (const f of Array.from(list)) fd.append("file", f);
+      await fetch("/api/files", { method: "POST", body: fd });
+    } finally {
+      const keys = new Set(items.map((i) => i.key));
+      setUploading((u) => u.filter((x) => !keys.has(x.key)));
+      mutate(); // la fila real ya existe en la BD (registro síncrono en la API)
+    }
+  }
+
+  async function patch(id: string, body: { original_name?: string; category?: string }) {
+    await fetch(`/api/files/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
     mutate();
   }
 
@@ -69,21 +111,22 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
     <section
       className="flex w-96 shrink-0 flex-col border-l border-border bg-surface"
       onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return; // solo archivos del Finder
         e.preventDefault();
-        setDragging(true);
+        setDraggingUpload(true);
       }}
-      onDragLeave={() => setDragging(false)}
+      onDragLeave={() => setDraggingUpload(false)}
       onDrop={(e) => {
         e.preventDefault();
-        setDragging(false);
+        setDraggingUpload(false);
         if (e.dataTransfer.files.length) upload(e.dataTransfer.files);
       }}
     >
       <div className="flex h-[60px] shrink-0 items-center gap-2.5 border-b border-border px-4">
         <span className="flex-1 text-[15px] font-bold">Archivos</span>
         <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          value={uploadCategory}
+          onChange={(e) => setUploadCategory(e.target.value)}
           className="h-8 rounded-lg border border-border bg-[#FBFDFC] px-2 text-xs outline-none"
           title="Categoría para las subidas"
         >
@@ -121,6 +164,23 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
         />
       </div>
 
+      <div className="px-4 pt-3">
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-[#FBFDFC] px-2.5 py-2 text-[13px] text-muted focus-within:border-primary">
+          <SearchIcon size={14} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nombre…"
+            className="w-full bg-transparent text-foreground outline-none placeholder:text-faint"
+          />
+          {query && (
+            <button onClick={() => setQuery("")} className="text-faint hover:text-foreground">
+              <XIcon size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-3">
         <UpcomingDeadlines />
 
@@ -130,21 +190,51 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
             <span className="font-semibold text-primary">data/inbox/</span>.
           </p>
         )}
+        {files.length > 0 && q && filtered.length === 0 && (
+          <p className="px-2 py-8 text-center text-[13px] text-faint">
+            Ningún archivo coincide con &ldquo;{query}&rdquo;.
+          </p>
+        )}
 
         {grouped.map(([cat, list]) => {
-          const isOpen = open[cat] ?? false;
+          const catUploading = uploading.filter((u) => u.category === cat);
+          const isOpen = q ? true : catUploading.length > 0 ? true : (open[cat] ?? false);
+          const isDropTarget = dropCat === cat;
           return (
             <div key={cat}>
               <button
                 onClick={() => setOpen((o) => ({ ...o, [cat]: !isOpen }))}
-                className={`flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2.5 text-[13.5px] ${
-                  isOpen ? "bg-[#F1F6F3] font-semibold" : ""
+                onDragOver={(e) => {
+                  const types = e.dataTransfer.types;
+                  if (!types.includes(DRAG_MIME) && !types.includes("Files")) return;
+                  e.preventDefault();
+                  e.stopPropagation(); // no marcar también el dropzone genérico de abajo
+                  setDropCat(cat);
+                }}
+                onDragLeave={() => setDropCat((c) => (c === cat ? null : c))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation(); // que no suba y lo suba también el <section> con otra categoría
+                  setDropCat(null);
+                  const id = e.dataTransfer.getData(DRAG_MIME);
+                  if (id) patch(id, { category: cat }); // reclasificar un archivo ya indexado
+                  else if (e.dataTransfer.files.length) upload(e.dataTransfer.files, cat); // subir desde el Finder, ya categorizado
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2.5 text-[13.5px] transition ${
+                  isDropTarget
+                    ? "bg-mint-tint ring-2 ring-primary"
+                    : isOpen
+                      ? "bg-[#F1F6F3] font-semibold"
+                      : ""
                 }`}
               >
                 <span className="text-primary">
                   <CategoryIcon category={cat} />
                 </span>
-                <span className="flex-1 text-left">{cat}</span>
+                <span className="flex-1 text-left">{isDropTarget ? "Suelta aquí" : cat}</span>
+                {catUploading.length > 0 && (
+                  <SpinnerIcon size={12} className="text-primary" />
+                )}
                 <span className="text-xs text-faint">{list.length}</span>
                 {isOpen ? (
                   <ChevronDownIcon size={14} className="text-primary" />
@@ -153,10 +243,32 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
                 )}
               </button>
 
-              {isOpen && (
+              {isOpen && list.length === 0 && catUploading.length === 0 && (
+                <p className="py-2 pl-9 pr-2 text-[12px] text-faint">
+                  Vacía — arrastra un archivo aquí para moverlo a esta carpeta.
+                </p>
+              )}
+
+              {isOpen && (list.length > 0 || catUploading.length > 0) && (
                 <div className="flex flex-col gap-0.5 py-1 pl-7 pr-1">
+                  {catUploading.map((u) => (
+                    <div
+                      key={u.key}
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] text-muted"
+                    >
+                      <SpinnerIcon size={13} className="shrink-0 text-primary" />
+                      <span className="min-w-0 flex-1 truncate">{u.name}</span>
+                      <span className="shrink-0 text-[11px] font-medium text-primary">Subiendo…</span>
+                    </div>
+                  ))}
                   {list.map((f) => (
-                    <FileRow key={f.id} f={f} onDelete={() => del(f.id)} onReindex={() => reindex(f.id)} />
+                    <FileRow
+                      key={f.id}
+                      f={f}
+                      onDelete={() => del(f.id)}
+                      onReindex={() => reindex(f.id)}
+                      onRename={(name) => patch(f.id, { original_name: name })}
+                    />
                   ))}
                 </div>
               )}
@@ -168,7 +280,9 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
       <div className="border-t border-border p-3.5">
         <div
           className={`rounded-xl border-[1.5px] border-dashed p-4 text-center text-[12.5px] leading-relaxed transition ${
-            dragging ? "border-primary bg-mint-tint text-primary-strong" : "border-mint-border text-muted"
+            draggingUpload
+              ? "border-primary bg-mint-tint text-primary-strong"
+              : "border-mint-border text-muted"
           }`}
         >
           Arrastra archivos aquí
@@ -219,27 +333,75 @@ function FileRow({
   f,
   onDelete,
   onReindex,
+  onRename,
 }: {
   f: FileDTO;
   onDelete: () => void;
   onReindex: () => void;
+  onRename: (name: string) => void;
 }) {
   const busy = BUSY.includes(f.status);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(f.original_name);
+  const [dragging, setDragging] = useState(false);
+
+  function commit() {
+    setEditing(false);
+    const name = draft.trim();
+    if (name && name !== f.original_name) onRename(name);
+    else setDraft(f.original_name);
+  }
+
   return (
-    <div className="group flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] text-foreground/80 hover:bg-[#F7FAF8]">
-      <span className="text-faint">
+    <div
+      draggable={!editing}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_MIME, f.id);
+        e.dataTransfer.effectAllowed = "move";
+        setDragging(true);
+      }}
+      onDragEnd={() => setDragging(false)}
+      className={`group flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] text-foreground/80 hover:bg-[#F7FAF8] ${
+        dragging ? "opacity-40" : ""
+      }`}
+      title="Arrastra a otra carpeta para reclasificar"
+    >
+      <span className="shrink-0 text-faint">
         <CategoryIcon category={f.category} size={14} />
       </span>
-      <a
-        href={rawUrl(f.id)}
-        target="_blank"
-        rel="noreferrer"
-        className="flex min-w-0 flex-1 items-center gap-1 truncate hover:text-primary-strong"
-        title={f.original_name}
-      >
-        <span className="truncate">{f.original_name}</span>
-        <ExternalIcon size={11} className="shrink-0 text-faint opacity-0 group-hover:opacity-100" />
-      </a>
+
+      {editing ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") {
+              setDraft(f.original_name);
+              setEditing(false);
+            }
+          }}
+          onClick={(e) => e.preventDefault()}
+          className="min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-[12.5px] outline-none"
+        />
+      ) : (
+        <a
+          href={rawUrl(f.id)}
+          target="_blank"
+          rel="noreferrer"
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            setEditing(true);
+          }}
+          className="flex min-w-0 flex-1 items-center gap-1 truncate hover:text-primary-strong"
+          title={`${f.original_name} (doble clic para renombrar)`}
+        >
+          <span className="truncate">{f.original_name}</span>
+          <ExternalIcon size={11} className="shrink-0 text-faint opacity-0 group-hover:opacity-100" />
+        </a>
+      )}
 
       {f.status === "indexed" ? (
         <span className="flex shrink-0 items-center gap-1 text-[11px] text-primary" title={f.status_detail ?? ""}>
@@ -257,7 +419,7 @@ function FileRow({
         </span>
       )}
 
-      {!busy && (
+      {!busy && !editing && (
         <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
           <button onClick={onReindex} className="rounded p-1 text-faint hover:text-primary" title="Reindexar">
             <RefreshIcon size={12} />

@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { FILES_DIR, ensureDataDirs } from "@/lib/config";
 import { isSupported } from "@/lib/extract";
-import { enqueueIngest, ingestFile } from "@/lib/ingest";
+import { enqueueIngest, processFile, registerFile } from "@/lib/ingest";
 import { listFiles } from "@/lib/files";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Falta el campo 'file'" }, { status: 400 });
   }
 
-  const accepted: { name: string; queued: boolean; reason?: string }[] = [];
+  const accepted: { name: string; id?: string; queued: boolean; reason?: string }[] = [];
 
   for (const file of uploads) {
     if (!isSupported(file.name)) {
@@ -36,11 +36,20 @@ export async function POST(req: NextRequest) {
     const dest = path.join(FILES_DIR, `${crypto.randomUUID()}${ext}`);
     await writeFile(dest, Buffer.from(await file.arrayBuffer()));
 
-    enqueueIngest(() =>
-      ingestFile({ absPath: dest, originalName: file.name, category }),
-    ).catch((e) => console.error(`[api/files] ingesta ${file.name}:`, e));
-
-    accepted.push({ name: file.name, queued: true });
+    try {
+      // Registrar (dedupe + INSERT) se espera aquí, antes de responder: así la
+      // fila ya existe en la BD cuando el cliente refresque la lista. Solo el
+      // procesamiento pesado (extraer/trocear/embeddings) va a la cola.
+      const { file: registered, isNew } = await registerFile(dest, file.name, category);
+      if (isNew) {
+        enqueueIngest(() => processFile(registered.id)).catch((e) =>
+          console.error(`[api/files] ingesta ${file.name}:`, e),
+        );
+      }
+      accepted.push({ name: file.name, id: registered.id, queued: isNew });
+    } catch (e) {
+      accepted.push({ name: file.name, queued: false, reason: (e as Error).message });
+    }
   }
 
   return NextResponse.json({ accepted }, { status: 202 });
