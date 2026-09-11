@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { CATEGORIES } from "@/lib/categories";
 import {
@@ -31,6 +31,7 @@ const BUSY: FileDTO["status"][] = ["pending", "extracting", "chunking", "embeddi
 /** MIME a medida para el drag interno (arrastrar una fila a otra carpeta). No
  * choca con el drag de archivos reales del Finder, que llega como tipo "Files". */
 const DRAG_MIME = "application/x-second-brain-file-id";
+const OPEN_KEY = "sb.openFolders";
 
 /** Estado optimista: un archivo que se está subiendo, antes de que exista su fila real. */
 interface UploadingItem {
@@ -45,12 +46,31 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
   });
   const files = data?.files ?? [];
   const [uploadCategory, setUploadCategory] = useState<string>("Otros");
-  const [open, setOpen] = useState<Record<string, boolean>>({ Seguros: true });
+  // Carga qué carpetas estaban abiertas EN el primer render (no en un efecto
+  // posterior): este panel solo se monta ya en el navegador (nunca en el
+  // servidor), así que es seguro leer localStorage aquí sin provocar un salto
+  // visual ni un descuadre de hidratación.
+  const [open, setOpen] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(OPEN_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   const [query, setQuery] = useState("");
   const [dropCat, setDropCat] = useState<string | null>(null); // categoría con un archivo encima
   const [draggingUpload, setDraggingUpload] = useState(false); // drag de archivo real (Finder)
   const [uploading, setUploading] = useState<UploadingItem[]>([]); // estado optimista
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify(open));
+    } catch {
+      /* almacenamiento lleno o bloqueado -> no persiste, sin romper la UI */
+    }
+  }, [open]);
 
   const q = query.trim().toLowerCase();
   const filtered = q ? files.filter((f) => f.original_name.toLowerCase().includes(q)) : files;
@@ -226,6 +246,7 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
                 e.preventDefault();
                 e.stopPropagation(); // que no lo suba también el <section> con otra categoría
                 setDropCat(null);
+                setOpen((o) => ({ ...o, [cat]: true })); // que no se cierre al soltar: queda abierta de verdad
                 const id = e.dataTransfer.getData(DRAG_MIME);
                 if (id) patch(id, { category: cat }); // reclasificar un archivo ya indexado
                 else if (e.dataTransfer.files.length) upload(e.dataTransfer.files, cat); // subir desde el Finder, ya categorizado
@@ -404,6 +425,7 @@ function FileRow({
           href={rawUrl(f.id)}
           target="_blank"
           rel="noreferrer"
+          draggable={false} // el <a> es arrastrable por defecto; que el drag lo capture el <div> padre, no el navegador
           className="flex min-w-0 flex-1 items-center gap-1 truncate hover:text-primary-strong"
           title={f.original_name}
         >
