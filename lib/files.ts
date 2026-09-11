@@ -43,6 +43,29 @@ export function insertFile(f: NewFile): FileRow {
   return getFile(f.id)!;
 }
 
+/**
+ * Actualiza el nombre visible y/o la categoría de un archivo. Campos omitidos
+ * (`undefined`) no se tocan. No renombra ni mueve nada en disco: solo cambia
+ * cómo se muestra/organiza en la app.
+ */
+export function updateFile(
+  id: string,
+  patch: { original_name?: string; category?: string },
+): FileRow | undefined {
+  if (!getFile(id)) return undefined;
+  const name = patch.original_name?.trim() || null; // "" o undefined -> no tocar
+  const category = patch.category && isCategory(patch.category) ? patch.category : null;
+  getDb()
+    .prepare(
+      `UPDATE files SET
+         original_name = COALESCE(?, original_name),
+         category      = COALESCE(?, category)
+       WHERE id = ?`,
+    )
+    .run(name, category, id);
+  return getFile(id);
+}
+
 export function setStatus(
   id: string,
   status: FileStatus,

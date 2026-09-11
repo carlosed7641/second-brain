@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listFiles } from "@/lib/files";
-import { enqueueIngest, reindexFile } from "@/lib/ingest";
+import { enqueueIngest, prepareReindex, processFile } from "@/lib/ingest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +11,8 @@ const BUSY = new Set(["pending", "extracting", "chunking", "embedding", "metadat
 export function POST() {
   const targets = listFiles().filter((f) => !BUSY.has(f.status));
   for (const f of targets) {
-    enqueueIngest(() => reindexFile(f.id)).catch((e) =>
+    prepareReindex(f.id); // síncrono: se ve 'pending' en toda la lista de inmediato
+    enqueueIngest(() => processFile(f.id)).catch((e) =>
       console.error(`[api/files] reindex-all ${f.id}:`, e),
     );
   }
