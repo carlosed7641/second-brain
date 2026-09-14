@@ -1,5 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { DATA_DIR } from "./config";
 
 /**
  * Extracción de texto por "página". `page` es 1-indexado; para formatos sin
@@ -137,8 +138,13 @@ async function extractImage(absPath: string): Promise<ExtractResult> {
 
 async function createOcrWorker() {
   const { createWorker } = await import("tesseract.js");
+  // Por defecto tesseract.js descarga los modelos de idioma (~10-15 MB) al
+  // directorio de trabajo del proceso, no a DATA_DIR. Se fija explícitamente
+  // para que vivan junto al resto de los datos de la app, no en la raíz del proyecto.
+  const cachePath = path.join(DATA_DIR, ".tesseract-cache");
+  await mkdir(cachePath, { recursive: true });
   // spa + eng cubre la administración personal en español con términos en inglés.
-  return createWorker(["spa", "eng"]);
+  return createWorker(["spa", "eng"], undefined, { cachePath });
 }
 
 function normalize(text: string): string {

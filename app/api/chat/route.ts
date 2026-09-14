@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { addMessage, getPromptContext, getSession, messageCount, renameSession } from "@/lib/chat";
-import { hybridSearch } from "@/lib/retrieve";
+import { findFilesByKeyword, hybridSearch } from "@/lib/retrieve";
 import { assembleContext, assembleMetadataContext, buildUserTurn } from "@/lib/context";
 import { classifyQuestion } from "@/lib/classify";
 import { queryMetadata } from "@/lib/metadata";
@@ -48,10 +48,22 @@ export async function POST(req: NextRequest) {
   try {
     const cls = await classifyQuestion(message);
     if (cls.route === "metadata") {
+      // No filtramos por cls.keys: es una intuición de un modelo barato sobre 9
+      // categorías fijas que no cubren todo (p. ej. "cita médica" no encaja
+      // limpiamente en ninguna) — usarlo como filtro duro puede excluir en
+      // silencio el dato correcto. Mejor traer todo lo relevante del archivo y
+      // que el modelo grande, con el cuadro completo, elija.
+      //
+      // Sí acotamos por ARCHIVO: con muchos documentos, una consulta global
+      // puede llenar el límite con metadatos de archivos sin relación y dejar
+      // fuera el dato que sí hacía falta (pasó con un importe). findFilesByKeyword
+      // usa FTS — sin coste de embeddings — para encontrar los archivos que de
+      // verdad mencionan las palabras de la pregunta.
+      const scopeFileIds = body.fileId ? undefined : findFilesByKeyword(message);
       const hits = queryMetadata({
-        keys: cls.keys.length ? cls.keys : undefined,
         fileId: body.fileId,
-        limit: 12,
+        fileIds: scopeFileIds?.length ? scopeFileIds : undefined,
+        limit: 20,
       });
       if (hits.length > 0) {
         route = "metadata";
@@ -125,13 +137,18 @@ export async function POST(req: NextRequest) {
           citations,
           usage,
         });
-        controller.enqueue(line({ type: "done", usage, route }));
-
+        // Se espera ANTES de mandar "done": si no, el cliente cierra el stream y
+        // refresca la lista de sesiones antes de que el título nuevo llegue a la
+        // BD -> "a veces no se actualiza" (carrera, no fallo consistente).
         if (isFirstTurn) {
-          generateTitle(message, full)
-            .then((t) => renameSession(sessionId, t))
-            .catch((e) => console.warn("[api/chat] título:", e));
+          try {
+            const title = await generateTitle(message, full);
+            renameSession(sessionId, title);
+          } catch (e) {
+            console.warn("[api/chat] título:", e);
+          }
         }
+        controller.enqueue(line({ type: "done", usage, route }));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[api/chat] stream:", msg);

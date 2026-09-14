@@ -91,6 +91,8 @@ export interface QueryMetadataOptions {
   keys?: string[];
   upcoming?: boolean;
   fileId?: string;
+  /** Acotar a varios archivos (p. ej. los que encontró findFilesByKeyword). */
+  fileIds?: string[];
   limit?: number;
 }
 
@@ -99,6 +101,7 @@ export function queryMetadata({
   keys,
   upcoming,
   fileId,
+  fileIds,
   limit = 50,
 }: QueryMetadataOptions = {}): MetadataHit[] {
   const where: string[] = [];
@@ -110,14 +113,24 @@ export function queryMetadata({
   if (fileId) {
     where.push("m.file_id = ?");
     params.push(fileId);
+  } else if (fileIds && fileIds.length) {
+    where.push(`m.file_id IN (${fileIds.map(() => "?").join(",")})`);
+    params.push(...fileIds);
   }
   if (upcoming) where.push("m.value_date IS NOT NULL AND m.value_date >= date('now')");
+
+  // "Próximos vencimientos" quiere orden por fecha; la búsqueda del chat quiere
+  // primero lo más fiable — ordenar por fecha ahí penalizaba en silencio los
+  // datos sin fecha (importes, referencias...) cuando había muchas filas.
+  const orderBy = upcoming
+    ? "(m.value_date IS NULL), m.value_date ASC, m.confidence DESC"
+    : "m.confidence DESC, (m.value_date IS NULL), m.value_date ASC";
 
   const sql = `
     SELECT m.*, f.original_name AS file_name, f.category
     FROM doc_metadata m JOIN files f ON f.id = m.file_id
     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-    ORDER BY (m.value_date IS NULL), m.value_date ASC, m.confidence DESC
+    ORDER BY ${orderBy}
     LIMIT ?`;
   params.push(limit);
   return getDb().prepare(sql).all(...params) as MetadataHit[];

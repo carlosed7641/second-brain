@@ -94,8 +94,35 @@ export async function hybridSearch(
     .filter((x): x is RetrievedChunk => x !== null);
 }
 
+/**
+ * Qué archivos mencionan las palabras de la pregunta (FTS5, sin embeddings —
+ * gratis). Se usa para acotar la ruta de metadatos a los archivos relevantes,
+ * en vez de mezclar los de toda la colección.
+ */
+export function findFilesByKeyword(query: string, limit = 6): string[] {
+  const match = toFtsMatch(query);
+  if (!match) return [];
+  try {
+    const rows = getDb()
+      .prepare("SELECT file_id FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?")
+      .all(match, limit * 3) as { file_id: string }[]; // varios chunks pueden ser del mismo archivo
+
+    const seen = new Set<string>();
+    const fileIds: string[] = [];
+    for (const r of rows) {
+      if (seen.has(r.file_id)) continue;
+      seen.add(r.file_id);
+      fileIds.push(r.file_id);
+      if (fileIds.length >= limit) break;
+    }
+    return fileIds;
+  } catch {
+    return [];
+  }
+}
+
 /** Convierte texto libre en una consulta MATCH de FTS5 segura: `"tok1" OR "tok2"`. */
-function toFtsMatch(query: string): string | null {
+export function toFtsMatch(query: string): string | null {
   const tokens = query
     .toLowerCase()
     .normalize("NFKD")
