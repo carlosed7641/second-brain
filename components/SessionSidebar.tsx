@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { BrainIcon, FolderIcon, PlusIcon, TrashIcon } from "./icons";
 import { fetcher, type SessionDTO } from "./lib";
 
@@ -25,6 +25,7 @@ export default function SessionSidebar({
   filesOpen,
 }: Props) {
   const { data, mutate } = useSWR<{ sessions: SessionDTO[] }>("/api/sessions", fetcher);
+  const { mutate: globalMutate } = useSWRConfig();
   const sessions = data?.sessions ?? [];
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -45,6 +46,9 @@ export default function SessionSidebar({
       body: JSON.stringify({ title }),
     });
     await mutate();
+    // ChatPane tiene su propia caché SWR para esta sesión (key distinta);
+    // si no se le avisa, su cabecera se queda con el título viejo.
+    await globalMutate(`/api/sessions/${id}`);
   }
 
   return (
@@ -94,7 +98,7 @@ export default function SessionSidebar({
                       if (e.key === "Enter") rename(s.id);
                       if (e.key === "Escape") setEditing(null);
                     }}
-                    className="w-full rounded-lg bg-white px-2.5 py-2 text-[13.5px] outline-none ring-1 ring-primary"
+                    className="w-full rounded-lg border border-primary bg-white px-2.5 py-2 text-[13.5px] outline-none"
                   />
                 ) : (
                   <>

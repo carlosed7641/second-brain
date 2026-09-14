@@ -215,6 +215,12 @@ function AssistantBubble({
   usage?: TokenUsage | null;
   route?: "metadata" | "content" | null;
 }) {
+  // Solo las fuentes que el texto cita de verdad (route=metadata puede traer más
+  // fragmentos de los que el modelo acaba usando), y agrupadas por archivo+página:
+  // varios [n] del mismo sitio son un único chip, no uno por cada dato citado.
+  const cited = citedNumbers(text);
+  const groupedCitations = groupCitations(citations.filter((c) => cited.has(c.n)));
+
   return (
     <div className="flex max-w-[640px] gap-3">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] bg-mint-tint text-primary">
@@ -235,7 +241,7 @@ function AssistantBubble({
 
         {(usage || route) && !streaming && (
           <div className="flex items-center gap-2 text-[11px] text-faint">
-            {route === "metadata" && (
+            {route == "metadata" && (
               <span className="rounded bg-mint-tint px-1.5 py-0.5 font-medium text-primary">
                 respuesta directa
               </span>
@@ -252,23 +258,23 @@ function AssistantBubble({
           </div>
         )}
 
-        {citations.length > 0 && (
+        {groupedCitations.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {citations.map((c) => (
+            {groupedCitations.map((g) => (
               <a
-                key={c.n}
-                href={rawUrl(c.file_id, c.page)}
+                key={g.key}
+                href={rawUrl(g.file_id, g.page)}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 rounded-full border border-[#E0EAE4] bg-[#F1F6F3] px-2.5 py-1.5 text-xs text-[#4A5A51] transition hover:border-mint-border hover:bg-mint-tint"
-                title={c.snippet}
+                title={g.snippets.join("\n")}
               >
                 <span className="text-primary">
-                  <CategoryIcon category={c.category} size={13} />
+                  <CategoryIcon category={g.category} size={13} />
                 </span>
-                <span className="font-medium">[{c.n}]</span>
-                {c.file_name}
-                {c.page != null && ` · p.${c.page}`}
+                <span className="font-medium">{g.ns.map((n) => `[${n}]`).join("")}</span>
+                {g.file_name}
+                {g.page != null && ` · p.${g.page}`}
                 <ExternalIcon size={12} className="text-faint" />
               </a>
             ))}
@@ -277,6 +283,47 @@ function AssistantBubble({
       </div>
     </div>
   );
+}
+
+/** Números [n] que el texto cita de verdad (para no mostrar chips de fuentes sin usar). */
+function citedNumbers(text: string): Set<number> {
+  const nums = new Set<number>();
+  for (const m of text.matchAll(/\[(\d+)\]/g)) nums.add(Number(m[1]));
+  return nums;
+}
+
+interface CitationGroup {
+  key: string;
+  ns: number[];
+  file_id: string;
+  file_name: string;
+  category: Citation["category"];
+  page: number | null;
+  snippets: string[];
+}
+
+/** Junta citas del mismo archivo+página en un solo chip con todos sus [n]. */
+function groupCitations(citations: Citation[]): CitationGroup[] {
+  const groups = new Map<string, CitationGroup>();
+  for (const c of citations) {
+    const key = `${c.file_id}#${c.page ?? ""}`;
+    const g = groups.get(key);
+    if (g) {
+      g.ns.push(c.n);
+      g.snippets.push(c.snippet);
+    } else {
+      groups.set(key, {
+        key,
+        ns: [c.n],
+        file_id: c.file_id,
+        file_name: c.file_name,
+        category: c.category,
+        page: c.page,
+        snippets: [c.snippet],
+      });
+    }
+  }
+  return [...groups.values()].sort((a, b) => Math.min(...a.ns) - Math.min(...b.ns));
 }
 
 /** Resalta los [n] del texto como pastillas. */
