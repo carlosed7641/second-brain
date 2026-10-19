@@ -68,7 +68,7 @@ hace **una sola vez, en la ingesta** — nunca al preguntar.
 
 ## Requisitos previos
 
-- Node.js 20+
+- Node.js 18+
 - Una API key de [Anthropic](https://console.anthropic.com/) (`ANTHROPIC_API_KEY`)
 - Una API key de [Voyage AI](https://www.voyageai.com/) (`VOYAGE_API_KEY`)
 
