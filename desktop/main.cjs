@@ -3,13 +3,14 @@
  * Proceso principal de la app de escritorio.
  *
  * 1. Arranca el servidor standalone de Next (`.next/standalone/server.js`) en
- *    un proceso utilitario de Electron, en un puerto libre de 127.0.0.1.
+ *    un proceso hijo (Electron como Node puro), en un puerto libre de 127.0.0.1.
  * 2. Muestra una pantalla de carga y, cuando el servidor responde, carga la app.
  *
  * Los datos (base de datos, archivos, settings.json con las claves) viven en
  * %APPDATA%\Second Brain\data, fuera de la carpeta de instalación.
  */
-const { app, BrowserWindow, Menu, dialog, shell, utilityProcess } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
+const { fork } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
@@ -81,12 +82,17 @@ function startServer(port, dataDir, logFile) {
   const log = fs.createWriteStream(logFile, { flags: "a" });
   log.write(`\n--- ${new Date().toISOString()} arranque en puerto ${port} ---\n`);
 
-  const child = utilityProcess.fork(entry, [], {
+  // El propio ejecutable de Electron en modo Node puro (ELECTRON_RUN_AS_NODE).
+  // No se usa utilityProcess porque ahí `process.type === "utility"` y pdfjs
+  // cree que está en un navegador: falla con 'No "GlobalWorkerOptions.workerSrc"
+  // specified' al leer cualquier PDF.
+  const child = fork(entry, [], {
     cwd: dir,
-    stdio: "pipe",
-    serviceName: "Second Brain server",
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
+    windowsHide: true,
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
       NODE_ENV: "production",
       PORT: String(port),
       HOSTNAME: "127.0.0.1",

@@ -79,5 +79,10 @@
       "uninstallerIcon": "desktop/icon.ico"
     },
     "afterPack": "./scripts/after-pack.cjs"
+  },
+  "overrides": {
+    "pdf-to-img": {
+      "pdfjs-dist": "$pdfjs-dist"
+    }
   }
 }

@@ -10,6 +10,7 @@
  */
 import { execSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
@@ -60,7 +61,10 @@ const port = 39000 + Math.floor(Math.random() * 1000);
 const env = { ...process.env, PORT: String(port), HOSTNAME: "127.0.0.1", DATA_DIR: path.join(tmp, "data") };
 delete env.ANTHROPIC_API_KEY;
 delete env.VOYAGE_API_KEY;
-const child = spawn(process.execPath, ["server.js"], { cwd: copy, env, stdio: ["ignore", "pipe", "pipe"] });
+// Mismo runtime que la app instalada: el ejecutable de Electron en modo Node.
+const electronExe = createRequire(import.meta.url)("electron");
+env.ELECTRON_RUN_AS_NODE = "1";
+const child = spawn(electronExe, ["server.js"], { cwd: copy, env, stdio: ["ignore", "pipe", "pipe"] });
 let output = "";
 child.stdout.on("data", (d) => (output += d));
 child.stderr.on("data", (d) => (output += d));

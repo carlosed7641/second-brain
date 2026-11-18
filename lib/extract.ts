@@ -67,7 +67,9 @@ async function extractDocx(absPath: string): Promise<ExtractResult> {
 
 async function extractSpreadsheet(absPath: string): Promise<ExtractResult> {
   const XLSX = await import("xlsx");
-  const wb = XLSX.readFile(absPath, { cellDates: true });
+  // XLSX.readFile no sirve aquí: la build ESM de xlsx no tiene acceso a `fs`
+  // ("Cannot access file …"). Se lee el archivo con Node y se pasan los bytes.
+  const wb = XLSX.read(await readFile(absPath), { type: "buffer", cellDates: true });
   const pages: ExtractedPage[] = wb.SheetNames.map((name, i) => {
     const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false });
     return { page: i + 1, text: normalize(`[Hoja: ${name}]\n${csv}`) };

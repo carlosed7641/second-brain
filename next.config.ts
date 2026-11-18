@@ -54,6 +54,9 @@ const nextConfig: NextConfig = {
     "sqlite-vec",
     "chokidar",
     "pdfjs-dist",
+    // Usa createRequire(...).resolve() para localizar pdfjs; si se empaqueta,
+    // resolve() devuelve un id numérico de módulo y falla el OCR de PDFs escaneados.
+    "pdf-to-img",
     "tesseract.js",
     "mammoth",
   ],
