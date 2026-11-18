@@ -17,6 +17,7 @@ import {
   TrashIcon,
   XIcon,
 } from "./icons";
+import InboxLink from "./InboxLink";
 import {
   STATUS_LABEL,
   daysUntil,
@@ -207,8 +208,7 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
 
         {files.length === 0 && (
           <p className="px-2 py-8 text-center text-[13px] leading-relaxed text-faint">
-            Sin documentos todavía. Arrastra archivos aquí o suéltalos en{" "}
-            <span className="font-semibold text-primary">data/inbox/</span>.
+            Sin documentos todavía. Arrastra archivos aquí o suéltalos en <InboxLink />.
           </p>
         )}
         {files.length > 0 && q && filtered.length === 0 && (
@@ -317,7 +317,7 @@ export default function FileBrowser({ onClose }: { onClose: () => void }) {
           }`}
         >
           Arrastra archivos aquí
-          <br />o suéltalos en <span className="font-semibold text-primary">data/inbox/</span>
+          <br />o suéltalos en <InboxLink />
           <div className="mt-1.5 text-[11px] text-faint">
             Se subirán a: <span className="font-semibold text-primary">{uploadCategory}</span>
           </div>

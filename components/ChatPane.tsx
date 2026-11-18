@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { BrainIcon, ExternalIcon, SendIcon, SpinnerIcon, UploadIcon } from "./icons";
 import { CategoryIcon } from "./icons";
+import InboxLink from "./InboxLink";
 import {
   estimateCostUSD,
   fetcher,
@@ -353,7 +354,7 @@ function Welcome({ onOpenFiles }: { onOpenFiles: () => void }) {
           <h1 className="text-[22px] font-bold text-primary-ink">Empieza una conversación</h1>
           <p className="text-sm leading-relaxed text-muted">
             Crea un chat nuevo y pregunta sobre tus contratos, seguros o recibos. Si aún no
-            has subido nada, arrástralo a <span className="font-semibold text-primary">data/inbox/</span> o
+            has subido nada, arrástralo a <InboxLink /> o
             usa el panel de archivos.
           </p>
           <button
