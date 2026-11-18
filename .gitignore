@@ -53,3 +53,6 @@ next-env.d.ts
 *.db-shm
 *.db-wal
 *.traineddata
+
+# desktop build
+/dist/

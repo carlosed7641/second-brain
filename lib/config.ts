@@ -2,8 +2,9 @@ import path from "node:path";
 import { mkdirSync } from "node:fs";
 
 /**
- * Configuración central. Los paths se resuelven una vez; las claves de API se
- * leen de forma perezosa para no romper `next build` en entornos sin `.env`.
+ * Configuración central. Los paths se resuelven una vez. Las claves de API
+ * viven en lib/settings.ts (pantalla de configuración, con el `.env` como
+ * respaldo).
  */
 
 export const DATA_DIR = process.env.DATA_DIR
@@ -33,16 +34,4 @@ export function ensureDataDirs(): void {
     mkdirSync(dir, { recursive: true });
   }
   dirsReady = true;
-}
-
-export function anthropicApiKey(): string {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("Falta ANTHROPIC_API_KEY en .env.local");
-  return key;
-}
-
-export function voyageApiKey(): string {
-  const key = process.env.VOYAGE_API_KEY;
-  if (!key) throw new Error("Falta VOYAGE_API_KEY en .env.local");
-  return key;
 }

@@ -5,7 +5,8 @@ import useSWR, { useSWRConfig } from "swr";
 import SessionSidebar from "@/components/SessionSidebar";
 import ChatPane from "@/components/ChatPane";
 import FileBrowser from "@/components/FileBrowser";
-import { fetcher, type FileDTO } from "@/components/lib";
+import SettingsModal from "@/components/SettingsModal";
+import { fetcher, type FileDTO, type SettingsDTO } from "@/components/lib";
 
 const LS_KEY = "sb.activeSession";
 const FILES_OPEN_KEY = "sb.filesOpen";
@@ -23,6 +24,10 @@ export default function Home() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const { data: filesData } = useSWR<{ files: FileDTO[] }>("/api/files", fetcher);
+  const { data: settings, mutate: mutateSettings } = useSWR<SettingsDTO>("/api/settings", fetcher);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Sin claves la app no sirve: se muestra la configuración y no se puede cerrar.
+  const keysMissing = !!settings && (!settings.anthropic.configured || !settings.voyage.configured);
 
   useIsomorphicLayoutEffect(() => {
     const saved = localStorage.getItem(LS_KEY);
@@ -68,6 +73,7 @@ export default function Home() {
         fileCount={filesData?.files.length ?? 0}
         filesOpen={filesOpen}
         onToggleFiles={() => setFilesOpen((v) => !v)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <ChatPane
@@ -77,6 +83,18 @@ export default function Home() {
       />
 
       {filesOpen && <FileBrowser onClose={() => setFilesOpen(false)} />}
+
+      {(settingsOpen || keysMissing) && (
+        <SettingsModal
+          status={settings}
+          required={keysMissing}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={(s) => {
+            mutateSettings(s, { revalidate: false });
+            setSettingsOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

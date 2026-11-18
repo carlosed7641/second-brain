@@ -6,6 +6,17 @@ export const fetcher = async (url: string) => {
   return r.json();
 };
 
+export interface KeyStatusDTO {
+  configured: boolean;
+  source: "settings" | "env" | null;
+  hint: string | null;
+}
+
+export interface SettingsDTO {
+  anthropic: KeyStatusDTO;
+  voyage: KeyStatusDTO;
+}
+
 export interface SessionDTO {
   id: string;
   title: string;

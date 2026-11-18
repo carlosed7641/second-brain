@@ -1,13 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { CHAT_MODEL, FAST_MODEL, anthropicApiKey } from "./config";
+import { CHAT_MODEL, FAST_MODEL } from "./config";
+import { anthropicApiKey } from "./settings";
 
 /** Cliente Anthropic + helpers de chat (system cacheado, streaming, título, resumen). */
 
-const g = globalThis as unknown as { __sbAnthropic?: Anthropic };
+const g = globalThis as unknown as { __sbAnthropic?: { key: string; client: Anthropic } };
 
+/** Cliente cacheado; se recrea solo si la clave cambia en Configuración. */
 export function getAnthropic(): Anthropic {
-  if (!g.__sbAnthropic) g.__sbAnthropic = new Anthropic({ apiKey: anthropicApiKey() });
-  return g.__sbAnthropic;
+  const key = anthropicApiKey();
+  if (g.__sbAnthropic?.key !== key) {
+    g.__sbAnthropic = { key, client: new Anthropic({ apiKey: key }) };
+  }
+  return g.__sbAnthropic.client;
 }
 
 const CHAT_EFFORT = (process.env.CHAT_EFFORT ?? "low") as

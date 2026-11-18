@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { EMBED_DIM, EMBED_MODEL, voyageApiKey } from "./config";
+import { EMBED_DIM, EMBED_MODEL } from "./config";
+import { voyageApiKey } from "./settings";
 
 /**
  * Embeddings con Voyage AI. `input_type` mejora la recuperación distinguiendo

@@ -1,0 +1,9 @@
+{
+  "name": "second-brain-desktop",
+  "productName": "Second Brain",
+  "version": "0.1.0",
+  "description": "Toda tu administración de vida en un solo lugar.",
+  "author": "Carlos Castro",
+  "private": true,
+  "main": "main.cjs"
+}

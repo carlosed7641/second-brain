@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop": "electron desktop",
+    "desktop:dist": "npm run desktop:build && electron-builder --win",
+    "desktop:icon": "node scripts/make-icon.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
@@ -31,9 +35,49 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "build": {
+    "appId": "com.secondbrain.app",
+    "productName": "Second Brain",
+    "directories": {
+      "app": "desktop",
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "package.json",
+      "icon.png",
+      "!node_modules/**/*"
+    ],
+    "npmRebuild": false,
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "desktop/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Second Brain",
+      "runAfterFinish": true,
+      "installerIcon": "desktop/icon.ico",
+      "uninstallerIcon": "desktop/icon.ico"
+    },
+    "afterPack": "./scripts/after-pack.cjs"
   }
 }

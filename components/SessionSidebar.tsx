@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
-import { BrainIcon, FolderIcon, PlusIcon, TrashIcon } from "./icons";
+import { BrainIcon, FolderIcon, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
 import { fetcher, type SessionDTO } from "./lib";
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
   fileCount: number;
   onToggleFiles: () => void;
   filesOpen: boolean;
+  onOpenSettings: () => void;
 }
 
 export default function SessionSidebar({
@@ -23,6 +24,7 @@ export default function SessionSidebar({
   fileCount,
   onToggleFiles,
   filesOpen,
+  onOpenSettings,
 }: Props) {
   const { data, mutate } = useSWR<{ sessions: SessionDTO[] }>("/api/sessions", fetcher);
   const { mutate: globalMutate } = useSWRConfig();
@@ -57,7 +59,14 @@ export default function SessionSidebar({
         <span className="flex size-8 items-center justify-center rounded-[9px] bg-mint-tint text-primary">
           <BrainIcon size={19} />
         </span>
-        Second Brain
+        <span className="flex-1">Second Brain</span>
+        <button
+          onClick={onOpenSettings}
+          className="rounded-lg p-1.5 text-faint transition hover:bg-mint-tint hover:text-primary"
+          title="Configuración"
+        >
+          <SettingsIcon size={17} />
+        </button>
       </div>
 
       <button
