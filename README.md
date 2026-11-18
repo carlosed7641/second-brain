@@ -34,6 +34,10 @@ de recuperación. Todo corre en local, para un único usuario, sin autenticació
   individual o global, y una card de "próximos vencimientos".
 - **Prompt caching** y **compactación de conversación** para mantener el coste bajo en
   chats largos.
+- **Pantalla de configuración** para introducir las claves de API desde la app (se
+  validan antes de guardarse).
+- **App de escritorio para Windows**: instalador `.exe` que abre la app sin `npm run dev`
+  (ver [App de escritorio](#app-de-escritorio-windows)).
 
 ## Stack
 
@@ -53,6 +57,8 @@ de recuperación. Todo corre en local, para un único usuario, sin autenticació
   imágenes y PDFs escaneados).
 - **Utilidades**: `chokidar` (watcher de carpeta), `gpt-tokenizer` (conteo de tokens),
   `zod` (validación/esquemas de salida estructurada), `swr` (data fetching en cliente).
+- **Escritorio**: Electron + `electron-builder` (instalador NSIS), sobre el build
+  `standalone` de Next.js.
 
 ## Cómo funciona una pregunta
 
@@ -68,7 +74,7 @@ hace **una sola vez, en la ingesta** — nunca al preguntar.
 
 ## Requisitos previos
 
-- Node.js 20+
+- Node.js 22+ (lo exige `better-sqlite3` 13)
 - Una API key de [Anthropic](https://console.anthropic.com/) (`ANTHROPIC_API_KEY`)
 - Una API key de [Voyage AI](https://www.voyageai.com/) (`VOYAGE_API_KEY`)
 
@@ -80,12 +86,18 @@ hace **una sola vez, en la ingesta** — nunca al preguntar.
    npm install
    ```
 
-2. Crear un archivo `.env.local` en la raíz con, como mínimo:
+2. Configurar las claves de API, de una de estas dos formas:
 
-   ```bash
-   ANTHROPIC_API_KEY=sk-ant-...
-   VOYAGE_API_KEY=pa-...
-   ```
+   - Copiar `.env.template` a `.env.local` y rellenar, como mínimo:
+
+     ```bash
+     ANTHROPIC_API_KEY=sk-ant-...
+     VOYAGE_API_KEY=pa-...
+     ```
+
+   - O dejarlas vacías y guardarlas desde la app: si faltan, al abrirla aparece la
+     pantalla de **Configuración**. Se guardan en `data/settings.json` y tienen prioridad
+     sobre las del `.env`.
 
    Variables opcionales (ver `lib/config.ts` para los valores por defecto):
 
@@ -125,6 +137,9 @@ Al arrancar (`instrumentation.ts`), la app aplica las migraciones de base de dat
   (o todos a la vez, tras cambios en la lógica de ingesta) o borrarlo.
 - **Sesiones de chat**: la barra lateral permite crear, renombrar (doble clic) y borrar
   sesiones; cada una mantiene su propio historial aislado.
+- **Configuración**: el icono junto al logo abre la pantalla de claves de API.
+- **Abrir la carpeta inbox**: el texto `data/inbox/` de la app es un enlace que abre esa
+  carpeta en el Explorador de archivos.
 
 ## Scripts
 
@@ -134,6 +149,104 @@ Al arrancar (`instrumentation.ts`), la app aplica las migraciones de base de dat
 | `npm run build`    | Build de producción.                      |
 | `npm run start`    | Sirve el build de producción.             |
 | `npm run lint`     | ESLint.                                   |
+| `npm run desktop:dist`  | Genera el instalador `.exe` de la app de escritorio. |
+| `npm run desktop:build` | Prepara y prueba el servidor para la app de escritorio. |
+| `npm run desktop`       | Abre la app de escritorio sin instalarla.  |
+| `npm run desktop:icon`  | Regenera el icono de la app de escritorio. |
+
+## App de escritorio (Windows)
+
+Second Brain se puede empaquetar como un instalador `.exe` para Windows. La app instalada abre directamente, sin `npm run dev` ni tener el repo, y guarda todos los datos en el equipo.
+
+### Requisitos
+
+- Windows 10/11 de 64 bits.
+- [Node.js](https://nodejs.org) 22 o superior (con npm).
+- Git.
+- Conexión a internet la primera vez: se descargan Electron y las herramientas del instalador (NSIS).
+- Claves de API de [Anthropic](https://console.anthropic.com/settings/keys) y [Voyage AI](https://dashboard.voyageai.com/organization/api-keys). No hacen falta para generar el `.exe`, solo para usar la app.
+
+No se necesita Visual Studio ni compilar nada en C++: los módulos nativos (`better-sqlite3`, `sqlite-vec`, `@napi-rs/canvas`) traen binarios precompilados.
+
+### Pasos
+
+1. **Clona el repo e instala las dependencias**
+
+   ```bash
+   git clone <url-del-repo>
+   cd second-brain
+   npm install
+   ```
+
+   No hace falta crear un `.env` para generar el `.exe`: la app instalada pide las claves al abrirse.
+
+2. **Cierra la app si ya la tienes instalada y abierta.** Si está abierta, el empaquetado no puede reemplazar los archivos de `dist/`.
+
+3. **Genera el instalador**
+
+   ```bash
+   npm run desktop:dist
+   ```
+
+   Tarda unos minutos y hace dos cosas:
+
+   - `npm run desktop:build`: compila Next (`next build`), quita el `.env` y la carpeta `data/` del paquete, comprueba que estén los binarios nativos y arranca una copia del servidor para probar las rutas `/api`. Debe terminar con:
+
+     ```
+     [desktop] prueba de humo del servidor (copia en una carpeta temporal)
+       200 /
+       200 /api/settings
+       200 /api/files
+       200 /api/sessions
+       200 /api/metadata
+       ok
+     ```
+
+     Si algo falla aquí, el proceso se detiene y no se genera el instalador.
+
+   - `electron-builder --win`: empaqueta la app y crea el instalador.
+
+4. **Comprueba el resultado.** El instalador queda en `dist/Second Brain Setup <versión>.exe`. Su fecha de modificación debe ser la de ahora; si es antigua, el paso 3 falló (revisa la salida de la terminal).
+
+5. **Instálalo.** Haz doble clic en el `.exe`. Como el instalador no está firmado, Windows muestra *"Windows protegió tu PC"*: pulsa **Más información → Ejecutar de todas formas**. Se instala solo para tu usuario (no pide permisos de administrador), crea accesos directos en el escritorio y en el menú inicio, y abre la app al terminar.
+
+6. **Configura las claves.** La primera vez que abres la app aparece la pantalla de configuración: pega tus claves de Anthropic y Voyage y pulsa **Guardar**. Se validan contra cada API antes de guardarse, así que deben ser claves vigentes. Puedes cambiarlas después desde el icono junto al logo.
+
+### Actualizar la app
+
+Tras cambiar el código (o hacer `git pull`), repite los pasos 2 a 5. El instalador nuevo se instala encima del anterior y **tus datos se conservan**.
+
+Para que la versión aparezca distinta en Windows, sube `"version"` en `desktop/package.json` antes de generar el instalador.
+
+### Dónde se guarda cada cosa
+
+| Qué | Ruta |
+|---|---|
+| Programa | `%LOCALAPPDATA%\Programs\second-brain-desktop\` |
+| Datos (base de datos, documentos, `inbox`, `settings.json` con las claves) | `%APPDATA%\Second Brain\data\` |
+| Registro del servidor | `%APPDATA%\Second Brain\logs\server.log` |
+
+Los datos de la app instalada son independientes de los de `npm run dev` (que usa `data/` del repo). Desinstalar la app no borra `%APPDATA%\Second Brain`.
+
+### Otros comandos
+
+| Comando | Para qué |
+|---|---|
+| `npm run desktop:build` | Solo prepara el servidor (`.next/standalone`), sin crear el instalador. |
+| `npm run desktop` | Abre la app con Electron sin instalarla (requiere `desktop:build` antes). |
+| `npx electron-builder --win` | Solo empaqueta, reutilizando el último `desktop:build`. |
+| `npm run desktop:icon` | Regenera `desktop/icon.ico` y `icon.png` desde `scripts/make-icon.mjs`. |
+
+### Si algo falla
+
+- **La app no abre o muestra un error al arrancar:** revisa `%APPDATA%\Second Brain\logs\server.log`.
+- **La app instalada no tiene los últimos cambios:** el instalador no se regeneró. Revisa la fecha de `dist/Second Brain Setup <versión>.exe` (paso 4).
+- **Un archivo queda en "Error":** el panel de archivos muestra el motivo; tras corregir la causa (por ejemplo, la clave), pulsa **Reindexar** en ese archivo.
+- **`EBUSY` o "resource busy" al empaquetar:** la app o una ventana del Explorador está usando `dist/`. Ciérralas y repite el paso 3.
+
+### Cómo funciona
+
+`next build` genera un servidor autocontenido (`output: "standalone"` en `next.config.ts`). Al abrir la app, `desktop/main.cjs` muestra una pantalla de carga, arranca ese servidor con el propio ejecutable de Electron en modo Node, en un puerto libre de `127.0.0.1`, y carga la app en la ventana cuando responde. `scripts/build-desktop.mjs` prepara y prueba el servidor antes de empaquetar, y `scripts/after-pack.cjs` lo copia dentro del instalador.
 
 ## Estructura del proyecto
 
@@ -149,16 +262,21 @@ app/
     sessions/route.ts                 # Listar / crear sesiones de chat
     sessions/[id]/route.ts            # Ver / renombrar / borrar una sesión
     metadata/route.ts                 # Vencimientos próximos / consultas por metadatos
+    settings/route.ts                 # Leer / validar y guardar las claves de API
+    inbox/route.ts                    # Ruta de data/inbox/ y abrirla en el explorador
 
 components/
   ChatPane.tsx                        # Historial + render incremental del stream + citas
   SessionSidebar.tsx                  # Lista de sesiones de chat
   FileBrowser.tsx                     # Panel de archivos por categoría, subida, estado
+  SettingsModal.tsx                   # Pantalla de configuración (claves de API)
+  InboxLink.tsx                       # Enlace "data/inbox/" que abre la carpeta
   icons.tsx, lib.ts
 
 lib/
   db.ts                               # Conexión SQLite + migraciones
-  config.ts                           # Paths, modelos, presupuestos, API keys
+  config.ts                           # Paths, modelos, presupuestos
+  settings.ts                         # Claves de API (data/settings.json, con el .env de respaldo)
   categories.ts                       # Categorías de archivo
   types.ts                            # Tipos compartidos
   watcher.ts                          # chokidar sobre data/inbox/
@@ -175,8 +293,10 @@ lib/
   classify.ts                         # Clasificación metadatos vs. contenido
   metadata.ts                         # Extracción y consulta de metadatos estructurados
 
+desktop/                              # App de escritorio: main.cjs (Electron), package.json, icono
+scripts/                              # build-desktop.mjs, after-pack.cjs, make-icon.mjs
 design/                               # Mockups estáticos del diseño (canvas previo a codificar)
-data/                                 # Fuera de git: inbox/, files/, second-brain.db
+data/                                 # Fuera de git: inbox/, files/, second-brain.db, settings.json
 instrumentation.ts                    # Migraciones + arranque del watcher al iniciar el servidor
 ```
 
@@ -227,8 +347,10 @@ chat, UI, capa de metadatos, pulido). `tsc` y `npm run build` limpios. Verificad
 end-to-end con claves reales: ingesta (watcher + API) → recuperación híbrida → respuesta
 en streaming citada; ruta de metadatos por SQL; prompt caching activo en multi-turno.
 
-Pendiente de verificar en runtime a mayor escala: OCR de imágenes/PDF escaneado, DOCX,
-XLSX, y la compactación con conversaciones de 15+ mensajes.
+Verificada la extracción de todos los formatos (TXT, MD, CSV, JSON, DOCX, XLSX, PDF con
+texto, PDF escaneado con OCR e imágenes con OCR) en el build de la app de escritorio, con
+embeddings simulados (`EMBED_FAKE=1`). Pendiente de verificar a mayor escala: la
+compactación con conversaciones de 15+ mensajes.
 
 ## Aviso importante sobre este repositorio
 
